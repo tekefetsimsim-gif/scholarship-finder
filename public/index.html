@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta name="theme-color" content="#0f172a">
+
+  <title>Scholarship Finder</title>
+
+  <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+  <header class="header">
+    <div class="logo">Scholarship Finder</div>
+
+    <nav>
+      <a href="#search">Search</a>
+      <a href="#results">Results</a>
+      <a href="#about">About</a>
+    </nav>
+  </header>
+
+
+  <main>
+
+    <section class="hero" id="search">
+
+      <div class="hero-content">
+
+        <h1>Find Your Master's Scholarship</h1>
+
+        <p>
+          Search for Master's programmes and scholarships in
+          Europe, USA, Canada and Australia.
+        </p>
+
+        <div class="search-box">
+
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="Example: Mathematics, Data Science..."
+          >
+
+          <button id="searchButton">
+            Search
+          </button>
+
+        </div>
+
+        <div class="quick-filters">
+
+          <button data-query="Mathematics">Mathematics</button>
+
+          <button data-query="Applied Mathematics">
+            Applied Mathematics
+          </button>
+
+          <button data-query="Statistics">
+            Statistics
+          </button>
+
+          <button data-query="Data Science">
+            Data Science
+          </button>
+
+          <button data-query="Data Analytics">
+            Data Analytics
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <section class="filters">
+
+      <h2>Filter Opportunities</h2>
+
+      <div class="filter-grid">
+
+        <div>
+          <label for="region">Region</label>
+
+          <select id="region">
+            <option value="all">All regions</option>
+            <option value="Europe">Europe</option>
+            <option value="USA">USA</option>
+            <option value="Canada">Canada</option>
+            <option value="Australia">Australia</option>
+          </select>
+        </div>
+
+
+        <div>
+          <label for="english">English requirement</label>
+
+          <select id="english">
+            <option value="all">All</option>
+            <option value="moi">MOI accepted</option>
+            <option value="waiver">Possible waiver</option>
+            <option value="required">IELTS/TOEFL required</option>
+          </select>
+        </div>
+
+
+        <div>
+          <label for="applicationFee">
+            Application fee
+          </label>
+
+          <select id="applicationFee">
+            <option value="all">All</option>
+            <option value="free">No application fee</option>
+            <option value="waiver">Fee waiver</option>
+            <option value="unknown">Unknown / not confirmed</option>
+            <option value="required">Fee required</option>
+          </select>
+        </div>
+
+
+        <div>
+          <label for="tuition">
+            Tuition
+          </label>
+
+          <select id="tuition">
+            <option value="all">All</option>
+            <option value="under5000">
+              Under $5,000/year
+            </option>
+            <option value="scholarship">
+              Higher tuition + scholarship
+            </option>
+          </select>
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <section class="results-section" id="results">
+
+      <div class="results-header">
+
+        <div>
+          <h2>Scholarship Opportunities</h2>
+
+          <p id="resultCount">
+            Search to find opportunities.
+          </p>
+        </div>
+
+      </div>
+
+
+      <div id="resultsContainer">
+
+        <div class="welcome-card">
+
+          <div class="icon">🎓</div>
+
+          <h3>Start your search</h3>
+
+          <p>
+            Search for Mathematics, Data Science, Statistics,
+            Applied Mathematics and related Master's programmes.
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <section class="about" id="about">
+
+      <h2>What this finder checks</h2>
+
+      <div class="feature-grid">
+
+        <div class="feature">
+          <h3>📅 Deadlines</h3>
+          <p>
+            Focuses on opportunities with deadlines in the
+            current month and the next two months.
+          </p>
+        </div>
+
+        <div class="feature">
+          <h3>🎓 Scholarships</h3>
+          <p>
+            Shows scholarship availability and coverage
+            when information is available.
+          </p>
+        </div>
+
+        <div class="feature">
+          <h3>🌍 Countries</h3>
+          <p>
+            Europe, USA, Canada and Australia.
+          </p>
+        </div>
+
+        <div class="feature">
+          <h3>🗣️ English</h3>
+          <p>
+            Prioritises MOI and English-test waiver options
+            while keeping IELTS/TOEFL-required programmes visible.
+          </p>
+        </div>
+
+        <div class="feature">
+          <h3>💰 Application fees</h3>
+          <p>
+            Separates programmes with no application fee,
+            fee waivers, unknown fees and required fees.
+          </p>
+        </div>
+
+        <div class="feature">
+          <h3>🔎 Multiple sources</h3>
+          <p>
+            The system is designed to search university,
+            scholarship and other credible sources.
+          </p>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <footer>
+    <p>
+      Scholarship Finder · Master's opportunities
+    </p>
+  </footer>
+
+
+  <script src="/app.js"></script>
+
+</body>
+                                          </html>
