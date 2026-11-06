@@ -9,6 +9,7 @@ const applicationFeeFilter = document.getElementById("applicationFee");
 const tuitionFilter = document.getElementById("tuition");
 
 let allResults = [];
+let lastSearchData = null;
 
 async function searchScholarships(query) {
   const searchTerm = query.trim();
@@ -27,33 +28,63 @@ async function searchScholarships(query) {
   resultCount.textContent = "Searching...";
 
   try {
-    const params = new URLSearchParams({
-      q: searchTerm,
-      region: regionFilter.value
+    const params = new URLSearchParams();
+
+    params.set("q", searchTerm);
+    params.set("region", regionFilter.value);
+    params.set("_", Date.now());
+
+    const response = await fetch(`/api/search?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store"
     });
 
-    const response = await fetch(`/api/search?${params}`);
-    const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch (jsonError) {
+      throw new Error(
+        "The server returned an invalid response."
+      );
+    }
 
     if (!response.ok) {
-      throw new Error(data.error || "Search failed.");
+      throw new Error(
+        data.error || `Search failed with status ${response.status}.`
+      );
     }
 
     if (!data.success) {
-      throw new Error(data.error || "Search failed.");
+      throw new Error(
+        data.error || "Search failed."
+      );
     }
 
-    allResults = data.results || [];
+    allResults = Array.isArray(data.results)
+      ? data.results
+      : [];
 
-    displayResults(data);
+    lastSearchData = data;
+
+    displayResults();
 
   } catch (error) {
-    console.error(error);
+    console.error("Scholarship search error:", error);
 
     resultsContainer.innerHTML = `
       <div class="error">
         <strong>Search unavailable</strong>
-        <p>${escapeHTML(error.message)}</p>
+
+        <p>
+          ${escapeHTML(error.message)}
+        </p>
+
+        <p>
+          Please try again in a moment.
+        </p>
       </div>
     `;
 
@@ -61,18 +92,24 @@ async function searchScholarships(query) {
   }
 }
 
-function displayResults(data) {
+function displayResults() {
   const results = filterResults(allResults);
 
-  const window = data.searchWindow || {};
+  const data = lastSearchData || {};
+
+  const searchWindow = data.searchWindow || {};
+  const counts = data.counts || {};
 
   if (results.length === 0) {
-    resultCount.textContent = "No opportunities match these filters.";
+    resultCount.textContent =
+      "No opportunities match these filters.";
 
     resultsContainer.innerHTML = `
       <div class="welcome-card">
         <div class="icon">🔎</div>
+
         <h3>No matching results</h3>
+
         <p>
           Try changing the filters or searching another subject.
         </p>
@@ -82,32 +119,44 @@ function displayResults(data) {
     return;
   }
 
-  const counts = data.counts || {};
-
   resultCount.innerHTML = `
     <strong>${results.length} opportunities displayed</strong>
+
     <br>
-    Search window: ${escapeHTML(window.start || "")}
-    to ${escapeHTML(window.end || "")}
+
+    Search window:
+    ${escapeHTML(searchWindow.start || "Not available")}
+    to
+    ${escapeHTML(searchWindow.end || "Not available")}
+
     <br>
-    OPEN NOW: ${counts.openNow || 0}
-    · OPENING SOON: ${counts.openingSoon || 0}
-    · POSSIBLY OPEN: ${counts.possiblyOpen || 0}
+
+    Open now:
+    ${counts.openNow || 0}
+
+    · Opening soon:
+    ${counts.openingSoon || 0}
+
+    · Possibly open:
+    ${counts.possiblyOpen || 0}
   `;
 
   resultsContainer.innerHTML = "";
 
-  const explanation = document.createElement("div");
-  explanation.className = "date-rule-notice";
+  const notice = document.createElement("div");
 
-  explanation.textContent =
+  notice.className = "date-rule-notice";
+
+  notice.textContent =
     "Results are selected by application opening date, not closing date. " +
-    "Applications opened earlier may also appear if they are still open.";
+    "Applications opened earlier may also appear if they remain open.";
 
-  resultsContainer.appendChild(explanation);
+  resultsContainer.appendChild(notice);
 
   results.forEach(result => {
-    resultsContainer.appendChild(createScholarshipCard(result));
+    resultsContainer.appendChild(
+      createScholarshipCard(result)
+    );
   });
 }
 
@@ -120,43 +169,57 @@ function filterResults(results) {
 
   if (english === "moi") {
     filtered = filtered.filter(result =>
-      /moi|medium of instruction/i.test(result.english || "")
+      /moi|medium of instruction/i.test(
+        result.english || ""
+      )
     );
   }
 
   if (english === "waiver") {
     filtered = filtered.filter(result =>
-      /waiver/i.test(result.english || "")
+      /waiver/i.test(
+        result.english || ""
+      )
     );
   }
 
   if (english === "required") {
     filtered = filtered.filter(result =>
-      /ielts|toefl/i.test(result.english || "")
+      /ielts|toefl/i.test(
+        result.english || ""
+      )
     );
   }
 
   if (fee === "free") {
     filtered = filtered.filter(result =>
-      /no application fee/i.test(result.applicationFee || "")
+      /no application fee/i.test(
+        result.applicationFee || ""
+      )
     );
   }
 
   if (fee === "waiver") {
     filtered = filtered.filter(result =>
-      /fee waiver/i.test(result.applicationFee || "")
+      /fee waiver/i.test(
+        result.applicationFee || ""
+      )
     );
   }
 
   if (fee === "unknown") {
     filtered = filtered.filter(result =>
-      /unknown|not confirmed/i.test(result.applicationFee || "")
+      /unknown|not confirmed/i.test(
+        result.applicationFee || ""
+      )
     );
   }
 
   if (fee === "required") {
     filtered = filtered.filter(result =>
-      /application fee reported/i.test(result.applicationFee || "")
+      /application fee reported/i.test(
+        result.applicationFee || ""
+      )
     );
   }
 
@@ -170,37 +233,50 @@ function filterResults(results) {
 
   if (tuition === "under5000") {
     filtered = filtered.filter(result =>
-      hasConfirmedLowTuition(result.tuition || "")
+      hasConfirmedLowTuition(
+        result.tuition || ""
+      )
     );
   }
 
-  // Prioritise MOI/waiver results without hiding IELTS/TOEFL results.
   filtered.sort((a, b) => {
-    const englishRank = result => {
-      const value = (result.english || "").toLowerCase();
-
-      if (/moi|medium of instruction/.test(value)) return 0;
-      if (/waiver/.test(value)) return 1;
-      if (/ielts|toefl/.test(value)) return 2;
-
-      return 3;
-    };
-
     return englishRank(a) - englishRank(b);
   });
 
   return filtered;
 }
 
+function englishRank(result) {
+  const value =
+    (result.english || "").toLowerCase();
+
+  if (
+    /moi|medium of instruction/.test(value)
+  ) {
+    return 0;
+  }
+
+  if (/waiver/.test(value)) {
+    return 1;
+  }
+
+  if (/ielts|toefl/.test(value)) {
+    return 2;
+  }
+
+  return 3;
+}
+
 function hasConfirmedLowTuition(value) {
   const text = value.toLowerCase();
 
-  // Only accept an explicitly stated USD amount below $5,000.
   const matches = text.match(
     /(?:usd|us\$|\$)\s*([0-9,]+(?:\.\d+)?)/g
   );
 
-  if (!matches) return false;
+  if (!matches) {
+    return false;
+  }
 
   return matches.some(match => {
     const number = Number(
@@ -212,30 +288,53 @@ function hasConfirmedLowTuition(value) {
 }
 
 function createScholarshipCard(result) {
-  const card = document.createElement("article");
+  const card =
+    document.createElement("article");
 
-  card.className = "scholarship-card";
+  card.className =
+    "scholarship-card";
 
-  const status = result.applicationStatus ||
+  const status =
+    result.applicationStatus ||
     "Application dates not confirmed";
 
-  const statusClass = status.startsWith("OPEN NOW")
-    ? "status-open"
-    : status === "OPENING SOON"
-      ? "status-upcoming"
-      : status.startsWith("CLOSED")
-        ? "status-closed"
-        : "status-unknown";
+  let statusClass =
+    "status-unknown";
+
+  if (
+    status.startsWith("OPEN NOW")
+  ) {
+    statusClass =
+      "status-open";
+  } else if (
+    status === "OPENING SOON"
+  ) {
+    statusClass =
+      "status-upcoming";
+  } else if (
+    status.startsWith("CLOSED")
+  ) {
+    statusClass =
+      "status-closed";
+  }
 
   card.innerHTML = `
     <div class="card-top">
+
       <span class="country">
-        ${escapeHTML(result.country || "Country not confirmed")}
+        ${escapeHTML(
+          result.country ||
+          "Country not confirmed"
+        )}
       </span>
 
       <span class="fee-status">
-        ${escapeHTML(result.applicationFee || "Fee unknown")}
+        ${escapeHTML(
+          result.applicationFee ||
+          "Fee unknown"
+        )}
       </span>
+
     </div>
 
     <div class="application-status ${statusClass}">
@@ -243,100 +342,168 @@ function createScholarshipCard(result) {
     </div>
 
     <h3>
-      ${escapeHTML(result.programme || "Programme name unavailable")}
+      ${escapeHTML(
+        result.programme ||
+        "Programme name unavailable"
+      )}
     </h3>
 
     <p class="university">
-      Source domain: ${escapeHTML(result.university || "Not identified")}
+      Source:
+      ${escapeHTML(
+        result.university ||
+        "Not identified"
+      )}
     </p>
 
     <div class="details">
 
       <div>
         <strong>Application opens</strong>
+
         <span>
-          ${escapeHTML(result.applicationOpeningDate || "Not confirmed")}
+          ${escapeHTML(
+            result.applicationOpeningDate ||
+            "Not confirmed"
+          )}
         </span>
       </div>
 
       <div>
         <strong>Application closes</strong>
+
         <span>
-          ${escapeHTML(result.applicationClosingDate || result.deadline || "Not confirmed")}
+          ${escapeHTML(
+            result.applicationClosingDate ||
+            result.deadline ||
+            "Not confirmed"
+          )}
         </span>
       </div>
 
       <div>
         <strong>Programme start</strong>
+
         <span>
-          ${escapeHTML(result.start || "Not confirmed")}
+          ${escapeHTML(
+            result.start ||
+            "Not confirmed"
+          )}
         </span>
       </div>
 
       <div>
         <strong>Tuition</strong>
+
         <span>
-          ${escapeHTML(result.tuition || "Not confirmed")}
+          ${escapeHTML(
+            result.tuition ||
+            "Not confirmed"
+          )}
         </span>
       </div>
 
       <div>
         <strong>Scholarship coverage</strong>
+
         <span>
-          ${escapeHTML(result.scholarship || "Not confirmed")}
+          ${escapeHTML(
+            result.scholarship ||
+            "Not confirmed"
+          )}
         </span>
       </div>
 
       <div>
         <strong>English requirement</strong>
+
         <span>
-          ${escapeHTML(result.english || "Not confirmed")}
+          ${escapeHTML(
+            result.english ||
+            "Not confirmed"
+          )}
         </span>
       </div>
 
       <div>
         <strong>Application fee</strong>
+
         <span>
-          ${escapeHTML(result.applicationFee || "Not confirmed")}
+          ${escapeHTML(
+            result.applicationFee ||
+            "Not confirmed"
+          )}
         </span>
       </div>
 
       <div>
         <strong>Source classification</strong>
+
         <span>
-          ${escapeHTML(result.sourceType || "Not confirmed")}
+          ${escapeHTML(
+            result.sourceType ||
+            "Not confirmed"
+          )}
         </span>
       </div>
 
     </div>
 
     <p class="description">
-      ${escapeHTML(result.description || "No description available.")}
+      ${escapeHTML(
+        result.description ||
+        "No description available."
+      )}
     </p>
 
     <p class="verification">
-      ${escapeHTML(result.verification || "Check the source page before applying.")}
+      ${escapeHTML(
+        result.verification ||
+        "Check the source page before applying."
+      )}
     </p>
 
-    <div class="card-actions">
-      ${
-        result.sourceLink
-          ? `
+    ${
+      result.sourceLink
+        ? `
+          <div class="card-actions">
+
             <a
-              href="${escapeAttribute(result.sourceLink)}"
+              href="${safeURL(result.sourceLink)}"
               target="_blank"
               rel="noopener noreferrer"
               class="official-link"
             >
               Open source page
             </a>
-          `
-          : ""
-      }
-    </div>
+
+          </div>
+        `
+        : ""
+    }
   `;
 
   return card;
+}
+
+function safeURL(url) {
+  try {
+    const parsed =
+      new URL(url);
+
+    if (
+      parsed.protocol === "https:" ||
+      parsed.protocol === "http:"
+    ) {
+      return escapeAttribute(
+        parsed.href
+      );
+    }
+
+    return "#";
+  } catch {
+    return "#";
+  }
 }
 
 function escapeHTML(value) {
@@ -353,24 +520,47 @@ function escapeAttribute(value) {
     .replaceAll("`", "&#096;");
 }
 
-searchButton.addEventListener("click", () => {
-  searchScholarships(searchInput.value);
-});
-
-searchInput.addEventListener("keydown", event => {
-  if (event.key === "Enter") {
-    searchScholarships(searchInput.value);
+searchButton.addEventListener(
+  "click",
+  () => {
+    searchScholarships(
+      searchInput.value
+    );
   }
-});
+);
 
-document.querySelectorAll(".quick-filters button")
+searchInput.addEventListener(
+  "keydown",
+  event => {
+    if (event.key === "Enter") {
+      searchScholarships(
+        searchInput.value
+      );
+    }
+  }
+);
+
+document
+  .querySelectorAll(
+    ".quick-filters button"
+  )
   .forEach(button => {
-    button.addEventListener("click", () => {
-      const query = button.dataset.query;
 
-      searchInput.value = query;
-      searchScholarships(query);
-    });
+    button.addEventListener(
+      "click",
+      () => {
+
+        const query =
+          button.dataset.query;
+
+        searchInput.value =
+          query;
+
+        searchScholarships(
+          query
+        );
+      }
+    );
   });
 
 [
@@ -378,17 +568,31 @@ document.querySelectorAll(".quick-filters button")
   applicationFeeFilter,
   tuitionFilter
 ].forEach(filter => {
-  filter.addEventListener("change", () => {
-    if (allResults.length) {
-      displayResults({
-        results: allResults
-      });
+
+  filter.addEventListener(
+    "change",
+    () => {
+
+      if (lastSearchData) {
+        displayResults();
+      }
+
     }
-  });
+  );
+
 });
 
-regionFilter.addEventListener("change", () => {
-  if (searchInput.value.trim()) {
-    searchScholarships(searchInput.value);
+regionFilter.addEventListener(
+  "change",
+  () => {
+
+    if (
+      searchInput.value.trim()
+    ) {
+      searchScholarships(
+        searchInput.value
+      );
+    }
+
   }
-});
+);
