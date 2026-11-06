@@ -55,11 +55,17 @@
             Applied Mathematics
           </button>
 
-          <button data-query="Statistics">Statistics</button>
+          <button data-query="Statistics">
+            Statistics
+          </button>
 
-          <button data-query="Data Science">Data Science</button>
+          <button data-query="Data Science">
+            Data Science
+          </button>
 
-          <button data-query="Data Analytics">Data Analytics</button>
+          <button data-query="Data Analytics">
+            Data Analytics
+          </button>
 
           <button data-query="Computational Mathematics">
             Computational Mathematics
@@ -96,4 +102,197 @@
             <option value="waiver">Possible English waiver</option>
             <option value="required">IELTS/TOEFL mentioned</option>
           </select>
-       
+        </div>
+
+        <div>
+          <label for="applicationFee">
+            Application fee
+          </label>
+
+          <select id="applicationFee">
+            <option value="all">All</option>
+            <option value="free">No application fee</option>
+            <option value="waiver">Fee waiver available</option>
+            <option value="unknown">
+              Unknown / not confirmed
+            </option>
+            <option value="required">
+              Fee required
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label for="tuition">
+            Tuition
+          </label>
+
+          <select id="tuition">
+            <option value="all">All</option>
+            <option value="under5000">
+              Under $5,000/year (USD stated)
+            </option>
+            <option value="scholarship">
+              Higher tuition + scholarship
+            </option>
+          </select>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="results-section" id="results">
+
+      <div class="results-header">
+
+        <div>
+
+          <h2>
+            Scholarship Opportunities
+          </h2>
+
+          <p id="resultCount">
+            Search to find opportunities.
+          </p>
+
+        </div>
+
+      </div>
+
+      <div id="resultsContainer">
+
+        <div class="welcome-card">
+
+          <div class="icon">
+            🎓
+          </div>
+
+          <h3>
+            Start your search
+          </h3>
+
+          <p>
+            Search for Mathematics, Mathematics Education,
+            Applied Mathematics, Statistics, Data Science
+            and related Master's programmes.
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
+    <section class="about" id="about">
+
+      <h2>
+        What this finder checks
+      </h2>
+
+      <div class="feature-grid">
+
+        <div class="feature">
+
+          <h3>
+            📅 Application dates
+          </h3>
+
+          <p>
+            Searches by application opening date in the current
+            month and the next two months. Earlier-opening
+            applications may also appear if they remain open.
+          </p>
+
+        </div>
+
+        <div class="feature">
+
+          <h3>
+            🎓 Scholarships
+          </h3>
+
+          <p>
+            Shows scholarship availability, funding and
+            coverage when information is available.
+          </p>
+
+        </div>
+
+        <div class="feature">
+
+          <h3>
+            🌍 Countries
+          </h3>
+
+          <p>
+            Focuses on Europe, USA, Canada and Australia.
+          </p>
+
+        </div>
+
+        <div class="feature">
+
+          <h3>
+            🗣️ English requirements
+          </h3>
+
+          <p>
+            Prioritises MOI acceptance and possible English
+            waivers while keeping IELTS/TOEFL opportunities visible.
+          </p>
+
+        </div>
+
+        <div class="feature">
+
+          <h3>
+            💰 Application fees
+          </h3>
+
+          <p>
+            Separates no-fee applications, fee waivers,
+            unknown fees and applications with reported fees.
+          </p>
+
+        </div>
+
+        <div class="feature">
+
+          <h3>
+            🔎 Multiple sources
+          </h3>
+
+          <p>
+            Searches across university websites, scholarship
+            providers and other scholarship information sources.
+          </p>
+
+        </div>
+
+      </div>
+
+      <p class="verification-note">
+        Search results are leads, not guaranteed confirmations.
+        Always check the original source before applying.
+        Dates, fees, tuition and eligibility may need verification.
+      </p>
+
+    </section>
+
+  </main>
+
+  <footer>
+
+    <p>
+      Scholarship Finder · Master's opportunities
+    </p>
+
+  </footer>
+
+  <!-- Cache-busting version number forces the browser
+       to load the latest JavaScript file. -->
+
+  <script src="/app.js?v=3"></script>
+
+</body>
+              </html>
