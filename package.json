@@ -1,0 +1,14 @@
+{
+  "name": "scholarship-finder",
+  "version": "1.0.0",
+  "description": "Scholarship and Master's programme finder",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3"
+  }
+}
