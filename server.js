@@ -16,17 +16,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-const TAVILY_URL = "https://api.tavily.com/search";
-
 const DESTINATIONS = {
   europe: [
-    "Europe", "Germany", "France", "Italy", "Switzerland",
-    "Netherlands", "Sweden", "Norway", "Finland", "Denmark",
-    "Belgium", "Austria", "Spain", "Portugal", "Ireland",
-    "United Kingdom", "Poland", "Czech Republic", "Hungary",
-    "Estonia", "Latvia", "Lithuania", "Greece", "Romania"
+    "Germany", "France", "Italy", "Switzerland",
+    "Netherlands", "Sweden", "Norway", "Finland",
+    "Denmark", "Belgium", "Austria", "Spain",
+    "Portugal", "Ireland", "United Kingdom",
+    "Poland", "Czech Republic", "Hungary",
+    "Estonia", "Latvia", "Lithuania", "Greece",
+    "Romania"
   ],
-  usa: ["United States", "USA", "United States of America"],
+  usa: ["United States"],
   canada: ["Canada"],
   australia: ["Australia"]
 };
@@ -48,70 +48,67 @@ function getSearchWindow() {
 
   return {
     start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10)
+    end: end.toISOString().slice(0, 10),
+    today: now.toISOString().slice(0, 10)
   };
 }
 
 function getDestinations(region) {
   if (region === "all") {
-    return [
-      "Europe",
-      "United States",
-      "Canada",
-      "Australia"
-    ];
+    return ["Europe", "United States", "Canada", "Australia"];
   }
 
-  return DESTINATIONS[region] || [
-    "Europe",
-    "United States",
-    "Canada",
-    "Australia"
-  ];
+  return DESTINATIONS[region] || [];
 }
 
 function buildQueries(subject, region, window) {
   const destinations = getDestinations(region).join(", ");
 
-  const subjectText = subject || 
-    "Mathematics, Mathematics Education, Applied Mathematics, Statistics, Data Science, Data Analytics, Computational Mathematics, Operations Research and Mathematical Sciences";
+  const subjects = subject ||
+    "Mathematics, Mathematics Education, Applied Mathematics, Statistics, Data Science, Data Analytics, Computational Mathematics and Operations Research";
 
-  const period = `application deadlines between ${window.start} and ${window.end}`;
+  const dateRule =
+    `Find applications opening between ${window.start} and ${window.end}. ` +
+    `Also include applications that opened earlier and remain open on ${window.today}. ` +
+    `Do not exclude opportunities because their closing date is after ${window.end}.`;
 
   return [
     {
-      type: "official university opportunities",
+      type: "Official university Master's programmes",
       query:
-        `Official university Master's scholarships and funded programmes in ${subjectText}. ` +
-        `Destinations: ${destinations}. International students. ` +
-        `${period}. Include tuition fees, application fees and English language requirements where available.`
+        `Official university Master's programmes and scholarships in ${subjects}. ` +
+        `Study destinations: ${destinations}. International applicants. ` +
+        `Find application opening dates, closing dates, tuition and application fees. ` +
+        dateRule
     },
     {
-      type: "government and major scholarships",
+      type: "Government scholarships",
       query:
-        `Government scholarships and fully funded Master's scholarships in ` +
-        `${subjectText} for international students in ${destinations}. ` +
-        `${period}. Include eligibility for international applicants and official application pages.`
+        `Official government-funded Master's scholarships in ${subjects} ` +
+        `for international students in ${destinations}. ` +
+        `Find opening dates, eligibility, scholarship amounts and deadlines. ` +
+        dateRule
     },
     {
-      type: "European scholarship programmes",
+      type: "Erasmus Mundus and European scholarships",
       query:
-        `Erasmus Mundus Joint Masters, DAAD and other European Master's scholarships ` +
-        `in ${subjectText}. International applicants. ${period}. Official programme websites.`
+        `Official Erasmus Mundus Joint Masters, DAAD and European university ` +
+        `scholarships in ${subjects}. Find 2027 application opening dates, ` +
+        `funding and international eligibility. ${dateRule}`
     },
     {
-      type: "English language alternatives",
+      type: "English language requirements",
       query:
-        `Master's scholarships in ${subjectText} in ${destinations} accepting ` +
-        `Medium of Instruction certificates, English-taught previous degrees, or English waivers. ` +
-        `Also include programmes requiring IELTS or TOEFL. ${period}.`
+        `Official Master's admission pages in ${subjects} in ${destinations}. ` +
+        `Find acceptance of Medium of Instruction certificates, English waivers, ` +
+        `IELTS and TOEFL requirements. ${dateRule}`
     },
     {
-      type: "application fees and tuition",
+      type: "Application fees and tuition",
       query:
-        `International Master's scholarships in ${subjectText} in ${destinations}. ` +
-        `Find official information about application fees, application fee waivers, ` +
-        `annual tuition fees and scholarship coverage. ${period}.`
+        `Official university and scholarship provider pages for Master's ` +
+        `programmes in ${subjects} in ${destinations}. Find application fees, ` +
+        `fee waivers, tuition and scholarship coverage. ${dateRule}`
     }
   ];
 }
@@ -121,22 +118,25 @@ async function tavilySearch(query) {
   const timeout = setTimeout(() => controller.abort(), 30000);
 
   try {
-    const response = await fetch(TAVILY_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        api_key: process.env.TAVILY_API_KEY,
-        query,
-        search_depth: "advanced",
-        topic: "general",
-        max_results: 8,
-        include_answer: false,
-        include_raw_content: false
-      }),
-      signal: controller.signal
-    });
+    const response = await fetch(
+      "https://api.tavily.com/search",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          api_key: process.env.TAVILY_API_KEY,
+          query,
+          search_depth: "advanced",
+          topic: "general",
+          max_results: 8,
+          include_answer: false,
+          include_raw_content: false
+        }),
+        signal: controller.signal
+      }
+    );
 
     const data = await response.json();
 
@@ -144,11 +144,12 @@ async function tavilySearch(query) {
       throw new Error(
         data?.detail ||
         data?.error ||
-        `Tavily returned HTTP ${response.status}`
+        `Tavily error ${response.status}`
       );
     }
 
     return Array.isArray(data.results) ? data.results : [];
+
   } finally {
     clearTimeout(timeout);
   }
@@ -165,17 +166,78 @@ function normaliseUrl(url) {
     const parsed = new URL(url);
     parsed.hash = "";
     parsed.search = "";
-    return parsed.toString().replace(/\/$/, "").toLowerCase();
+
+    return parsed.toString()
+      .replace(/\/$/, "")
+      .toLowerCase();
+
   } catch {
     return String(url || "").toLowerCase();
   }
 }
 
-function getCountry(text) {
-  const value = text.toLowerCase();
+function getDomain(url) {
+  try {
+    return new URL(url).hostname
+      .replace(/^www\./, "")
+      .toLowerCase();
+  } catch {
+    return "";
+  }
+}
 
-  const countries = [
-    "United States", "USA", "Canada", "Australia",
+function classifySource(url) {
+  const domain = getDomain(url);
+
+  const directories = [
+    "hotcoursesabroad.com",
+    "topuniversities.com",
+    "mastersportal.com",
+    "wemakescholars.com",
+    "scholarships360.org",
+    "applykite.com",
+    "yocket.com",
+    "leverageedu.com",
+    "scholarshiptab.com"
+  ];
+
+  if (directories.some(d =>
+    domain === d || domain.endsWith("." + d)
+  )) {
+    return "Scholarship directory or information website";
+  }
+
+  if (
+    domain.endsWith(".edu") ||
+    domain.endsWith(".edu.au") ||
+    domain.endsWith(".ac.uk") ||
+    domain.endsWith(".gov") ||
+    domain.endsWith(".gov.au") ||
+    domain.endsWith(".gc.ca") ||
+    domain.endsWith(".europa.eu") ||
+    domain.endsWith(".daad.de")
+  ) {
+    return "Potential official institution or government source";
+  }
+
+  return "Other source — official status not confirmed";
+}
+
+function getCountry(text, url) {
+  const value = text.toLowerCase();
+  const domain = getDomain(url);
+
+  const patterns = [
+    [/\b(?:study in|studying in|located in|university in|campus in|programme in|program in)\s+(?:the )?united states\b|\busa\b/, "United States"],
+    [/\b(?:study in|studying in|located in|university in|campus in|programme in|program in)\s+canada\b/, "Canada"],
+    [/\b(?:study in|studying in|located in|university in|campus in|programme in|program in)\s+australia\b/, "Australia"]
+  ];
+
+  for (const [pattern, country] of patterns) {
+    if (pattern.test(value)) return country;
+  }
+
+  const europeanCountries = [
     "Germany", "France", "Italy", "Switzerland",
     "Netherlands", "Sweden", "Norway", "Finland",
     "Denmark", "Belgium", "Austria", "Spain",
@@ -185,51 +247,192 @@ function getCountry(text) {
     "Romania"
   ];
 
-  for (const country of countries) {
-    if (value.includes(country.toLowerCase())) {
-      return country;
-    }
+  for (const country of europeanCountries) {
+    const pattern = new RegExp(
+      `(?:study in|studying in|located in|university in|campus in) ${country.toLowerCase()}`,
+      "i"
+    );
+
+    if (pattern.test(value)) return country;
   }
+
+  if (domain.endsWith(".edu.au") || domain.endsWith(".gov.au")) {
+    return "Australia";
+  }
+
+  if (domain.endsWith(".gc.ca")) return "Canada";
+  if (domain.endsWith(".ac.uk")) return "United Kingdom";
+  if (domain.endsWith(".de")) return "Germany";
+  if (domain.endsWith(".it")) return "Italy";
+  if (domain.endsWith(".fr")) return "France";
+  if (domain.endsWith(".ch")) return "Switzerland";
 
   return "Not identified";
 }
 
 function getRegion(country) {
-  if (["United States", "USA"].includes(country)) {
-    return "USA";
-  }
-
+  if (country === "United States") return "USA";
   if (country === "Canada") return "Canada";
   if (country === "Australia") return "Australia";
 
-  if (
-    country !== "Not identified" &&
-    country !== "United States"
-  ) {
-    return "Europe";
-  }
+  if (country !== "Not identified") return "Europe";
 
   return "Not identified";
+}
+
+const MONTHS = {
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11
+};
+
+function parseDate(text) {
+  const value = cleanText(text).toLowerCase();
+
+  const patterns = [
+    /\b(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(20\d{2})\b/i,
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2})\b/i,
+    /\b(20\d{2})-(\d{2})-(\d{2})\b/
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+
+    if (!match) continue;
+
+    let year;
+    let month;
+    let day;
+
+    if (/^\d{4}-/.test(match[0])) {
+      year = Number(match[1]);
+      month = Number(match[2]) - 1;
+      day = Number(match[3]);
+
+    } else if (/^\d/.test(match[1])) {
+      day = Number(match[1]);
+      month = MONTHS[match[2]];
+      year = Number(match[3]);
+
+    } else {
+      month = MONTHS[match[1]];
+      day = Number(match[2]);
+      year = Number(match[3]);
+    }
+
+    const date = new Date(Date.UTC(year, month, day));
+
+    if (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month &&
+      date.getUTCDate() === day
+    ) {
+      return date.toISOString().slice(0, 10);
+    }
+  }
+
+  return null;
+}
+
+function extractDateNearLabels(text, labels) {
+  const value = cleanText(text);
+
+  for (const label of labels) {
+    const index = value.toLowerCase().indexOf(label);
+
+    if (index === -1) continue;
+
+    const nearby = value.slice(
+      index,
+      index + 140
+    );
+
+    const date = parseDate(nearby);
+
+    if (date) return date;
+  }
+
+  return null;
+}
+
+function extractOpeningDate(text) {
+  return extractDateNearLabels(text, [
+    "application opens",
+    "applications open",
+    "opening date",
+    "application opening",
+    "applications begin",
+    "application starts",
+    "opens on",
+    "application form opens",
+    "call opens"
+  ]);
+}
+
+function extractClosingDate(text) {
+  return extractDateNearLabels(text, [
+    "application deadline",
+    "deadline",
+    "applications close",
+    "closing date",
+    "apply by",
+    "last date to apply",
+    "submission deadline",
+    "scholarship deadline"
+  ]);
+}
+
+function getApplicationStatus(openDate, closeDate, window) {
+  const today = window.today;
+
+  if (closeDate && closeDate < today) {
+    return "CLOSED — deadline has passed";
+  }
+
+  if (
+    openDate &&
+    openDate > today &&
+    openDate <= window.end
+  ) {
+    return "OPENING SOON";
+  }
+
+  if (
+    openDate &&
+    openDate <= today &&
+    (!closeDate || closeDate >= today)
+  ) {
+    return "OPEN NOW — verify on official page";
+  }
+
+  if (!openDate && closeDate && closeDate >= today) {
+    return "Possibly open — opening date not confirmed";
+  }
+
+  return "Application dates not confirmed";
 }
 
 function getApplicationFee(text) {
   const value = text.toLowerCase();
 
-  if (
-    /no application fee|application is free|free application|without application fee|no fee to apply/.test(value)
-  ) {
-    return "No application fee reported — verify on official page";
+  if (/no application fee|application is free|free application|without application fee|no fee to apply/.test(value)) {
+    return "No application fee reported — verify";
   }
 
-  if (
-    /application fee waiver|waiver of the application fee|fee waiver available/.test(value)
-  ) {
+  if (/application fee waiver|waiver of the application fee|fee waiver available/.test(value)) {
     return "Fee waiver reported — check eligibility";
   }
 
-  if (
-    /application fee|required application fee|application fee of|pay an application fee/.test(value)
-  ) {
+  if (/application fee|required application fee|application fee of|pay an application fee/.test(value)) {
     return "Application fee reported — amount needs verification";
   }
 
@@ -239,15 +442,11 @@ function getApplicationFee(text) {
 function getEnglishStatus(text) {
   const value = text.toLowerCase();
 
-  if (
-    /medium of instruction|moI certificate|medium-of-instruction|english language waiver|waiver of english|previous degree taught in english/.test(value)
-  ) {
+  if (/medium of instruction|moi certificate|medium-of-instruction|english language waiver|waiver of english|previous degree taught in english/.test(value)) {
     return "MOI or English waiver mentioned — verify";
   }
 
-  if (
-    /ielts|toefl/.test(value)
-  ) {
+  if (/ielts|toefl/.test(value)) {
     return "IELTS/TOEFL mentioned — check exact requirement";
   }
 
@@ -274,44 +473,11 @@ function getScholarship(text) {
     : "Scholarship details not confirmed";
 }
 
-function getDeadline(text) {
-  const value = text.toLowerCase();
-
-  const patterns = [
-    /(?:application deadline|deadline|apply by|applications close|closing date)[^.!?]{0,100}/gi
-  ];
-
-  for (const pattern of patterns) {
-    const matches = text.match(pattern);
-    if (matches) {
-      return matches.slice(0, 2).join(" | ");
-    }
-  }
-
-  return "Not confirmed";
-}
-
-function isClearlyExpired(deadlineText) {
-  const value = deadlineText.toLowerCase();
-
-  const dateMatch = value.match(
-    /\b(?:deadline|apply by|applications close|closing date)[^.!?]*?(\d{1,2}\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+20\d{2})/i
-  );
-
-  if (!dateMatch) return false;
-
-  const parsed = new Date(dateMatch[1]);
-
-  if (Number.isNaN(parsed.getTime())) return false;
-
-  return parsed < new Date();
-}
-
-function scoreResult(item) {
+function scoreResult(item, sourceType) {
   const text = (
-    item.title + " " +
-    item.content + " " +
-    item.url
+    (item.title || "") + " " +
+    (item.content || "") + " " +
+    (item.url || "")
   ).toLowerCase();
 
   let score = 0;
@@ -320,49 +486,65 @@ function scoreResult(item) {
   if (/scholarship|funded|funding|stipend/.test(text)) score += 4;
   if (/mathematics|statistics|data science|analytics/.test(text)) score += 5;
   if (/international students|international applicants/.test(text)) score += 2;
-  if (/application deadline|apply by|closing date/.test(text)) score += 2;
-  if (/ielts|toefl|medium of instruction/.test(text)) score += 1;
-
+  if (/application opens|applications open|opening date/.test(text)) score += 3;
   if (/phd|doctoral|undergraduate|bachelor's only/.test(text)) score -= 5;
+
+  if (sourceType.startsWith("Potential official")) score += 2;
+  if (sourceType.startsWith("Scholarship directory")) score -= 2;
 
   return score;
 }
 
-function createResult(item, searchType) {
+function createResult(item, searchType, window) {
   const title = cleanText(item.title);
   const content = cleanText(item.content);
   const url = cleanText(item.url);
-  const combined = `${title} ${content}`;
 
-  let host = "Source not identified";
+  const combined = `${title}. ${content}`;
 
-  try {
-    host = new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    // Keep fallback.
-  }
+  const sourceType = classifySource(url);
+  const country = getCountry(combined, url);
 
-  const country = getCountry(`${combined} ${url}`);
-  const deadline = getDeadline(combined);
+  const openingDate = extractOpeningDate(combined);
+  const closingDate = extractClosingDate(combined);
+
+  const status = getApplicationStatus(
+    openingDate,
+    closingDate,
+    window
+  );
 
   return {
     programme: title || "Programme title not identified",
-    university: host,
+    university: getDomain(url) || "Source not identified",
     country,
     region: getRegion(country),
+
     start: "Not confirmed",
-    deadline,
+
+    applicationOpeningDate: openingDate || "Not confirmed",
+    applicationClosingDate: closingDate || "Not confirmed",
+    deadline: closingDate || "Not confirmed",
+
+    applicationStatus: status,
+
     tuition: getTuition(combined),
     scholarship: getScholarship(combined),
     english: getEnglishStatus(combined),
     applicationFee: getApplicationFee(combined),
+
     officialLink: url,
     sourceLink: url,
+
+    sourceType,
     description: content,
     searchCategory: searchType,
-    verification: "Unverified search result",
-    expired: isClearlyExpired(deadline),
-    relevanceScore: scoreResult(item)
+
+    verification: "Unverified — check the linked page",
+
+    expired: status.startsWith("CLOSED"),
+
+    relevanceScore: scoreResult(item, sourceType)
   };
 }
 
@@ -379,14 +561,31 @@ app.get("/api/search", async (req, res) => {
     if (!process.env.TAVILY_API_KEY) {
       return res.status(500).json({
         success: false,
-        error: "Tavily API key is missing. Add TAVILY_API_KEY in Render environment variables."
+        error: "Tavily API key is missing."
       });
     }
 
     const subject = cleanText(req.query.q || "");
-    const region = cleanText(req.query.region || "all").toLowerCase();
 
-    const allowedRegions = ["all", "europe", "usa", "canada", "australia"];
+    const regionInput = cleanText(
+      req.query.region || "all"
+    ).toLowerCase();
+
+    const regionAliases = {
+      "all destinations": "all",
+      "europe": "europe",
+      "europe only": "europe",
+      "usa": "usa",
+      "united states": "usa",
+      "canada": "canada",
+      "australia": "australia"
+    };
+
+    const region = regionAliases[regionInput] || regionInput;
+
+    const allowedRegions = [
+      "all", "europe", "usa", "canada", "australia"
+    ];
 
     if (!allowedRegions.includes(region)) {
       return res.status(400).json({
@@ -405,15 +604,16 @@ app.get("/api/search", async (req, res) => {
     const window = getSearchWindow();
     const queries = buildQueries(subject, region, window);
 
-    const searchResponses = await Promise.all(
+    const responses = await Promise.all(
       queries.map(async (search) => {
         try {
           const results = await tavilySearch(search.query);
 
-          return results.map((item) => ({
+          return results.map(item => ({
             item,
             searchType: search.type
           }));
+
         } catch (error) {
           return [{
             error: error.message,
@@ -423,71 +623,135 @@ app.get("/api/search", async (req, res) => {
       })
     );
 
-    const successfulResults = searchResponses
-      .flat()
-      .filter((entry) => entry.item);
+    const entries = responses.flat();
 
-    const failedSearches = searchResponses
-      .flat()
-      .filter((entry) => entry.error)
-      .map((entry) => ({
+    const successful = entries.filter(
+      entry => entry.item
+    );
+
+    const failedSearches = entries
+      .filter(entry => entry.error)
+      .map(entry => ({
         category: entry.searchType,
         error: entry.error
       }));
 
     const unique = new Map();
 
-    for (const entry of successfulResults) {
+    for (const entry of successful) {
       const result = createResult(
         entry.item,
-        entry.searchType
+        entry.searchType,
+        window
       );
 
       const key = normaliseUrl(result.sourceLink);
 
-      if (!key || unique.has(key)) continue;
+      if (!key) continue;
 
-      unique.set(key, result);
+      const previous = unique.get(key);
+
+      if (
+        !previous ||
+        result.relevanceScore > previous.relevanceScore
+      ) {
+        unique.set(key, result);
+      }
     }
 
     let results = Array.from(unique.values());
 
-    // Remove results that are clearly outside the selected region.
     if (region !== "all") {
       const allowedCountries = getDestinations(region)
-        .map((country) => country.toLowerCase());
+        .map(country => country.toLowerCase());
 
-      results = results.filter((result) => {
-        if (result.country === "Not identified") return true;
+      results = results.filter(result => {
+        if (result.country === "Not identified") {
+          return true;
+        }
 
-        return allowedCountries.some((country) =>
-          result.country.toLowerCase().includes(country)
+        return allowedCountries.includes(
+          result.country.toLowerCase()
         );
       });
     }
 
-    // Clearly expired deadlines are moved to the bottom,
-    // rather than silently deleting potentially useful pages.
-    results.sort((a, b) => {
-      if (a.expired !== b.expired) {
-        return a.expired ? 1 : -1;
-      }
+    const active = results.filter(
+      result => !result.expired
+    );
 
-      return b.relevanceScore - a.relevanceScore;
+    const closed = results.filter(
+      result => result.expired
+    );
+
+    active.sort((a, b) => {
+      const rank = result => {
+        if (result.applicationStatus.startsWith("OPEN NOW")) return 0;
+        if (result.applicationStatus === "OPENING SOON") return 1;
+        if (result.applicationStatus.startsWith("Possibly open")) return 2;
+        return 3;
+      };
+
+      return rank(a) - rank(b) ||
+        b.relevanceScore - a.relevanceScore;
     });
+
+    closed.sort(
+      (a, b) => b.relevanceScore - a.relevanceScore
+    );
+
+    results = [...active, ...closed];
 
     res.json({
       success: true,
+
       totalResults: results.length,
-      searchWindow: window,
+
+      searchWindow: {
+        start: window.start,
+        end: window.end
+      },
+
+      dateRule:
+        "Based on application opening date, not closing date. " +
+        "Earlier-opening applications still open today are also included.",
+
       selectedRegion: region,
-      searchedSubject: subject || "Mathematics and data-related fields",
-      searchCategories: queries.map((query) => query.type),
+
+      searchedSubject:
+        subject || "Mathematics and data-related fields",
+
+      searchCategories: queries.map(
+        query => query.type
+      ),
+
+      counts: {
+        openNow: results.filter(
+          r => r.applicationStatus.startsWith("OPEN NOW")
+        ).length,
+
+        openingSoon: results.filter(
+          r => r.applicationStatus === "OPENING SOON"
+        ).length,
+
+        possiblyOpen: results.filter(
+          r => r.applicationStatus.startsWith("Possibly open")
+        ).length,
+
+        datesUnconfirmed: results.filter(
+          r => r.applicationStatus === "Application dates not confirmed"
+        ).length,
+
+        closed: closed.length
+      },
+
       failedSearches,
+
       notice:
         "These are discovery leads, not verified scholarship offers. " +
-        "Check the official university or scholarship provider page before applying. " +
-        "Unknown information is not assumed or invented.",
+        "Check official pages for opening dates, deadlines, eligibility, " +
+        "fees, tuition and English requirements. Unknown details are not assumed.",
+
       results
     });
 
@@ -510,5 +774,7 @@ app.use((req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Scholarship Finder running on port ${PORT}`);
+  console.log(
+    `Scholarship Finder running on port ${PORT}`
+  );
 });
