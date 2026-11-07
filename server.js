@@ -11,39 +11,32 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-const TODAY = new Date();
-
-const SUBJECTS = [
-  "Mathematics",
-  "Mathematics Education",
-  "Applied Mathematics",
-  "Statistics",
-  "Data Science",
-  "Data Analytics",
-  "Mathematical Data Science",
-  "Computational Mathematics",
-  "Operations Research",
-  "Artificial Intelligence",
-  "Machine Learning"
+const BLOCKED_DOMAINS = [
+  "facebook.com", "instagram.com", "reddit.com", "tiktok.com",
+  "youtube.com", "linkedin.com", "x.com", "twitter.com",
+  "letzstudy.com", "leverageedu.com", "yocket.com",
+  "scholarshiproar.com", "opportunitiesforafricans.com",
+  "scholars4dev.com", "mastersportal.com", "scholarshipportal.com",
+  "studyportals.com", "findamasters.com"
 ];
 
-const COUNTRY_ALIASES = {
+const DIRECTORY_DOMAINS = [
+  ...BLOCKED_DOMAINS, "studyabroad.shiksha.com", "educations.com"
+];
+
+const TRUSTED_PROGRAMME_DOMAINS = [
+  "intermaths.eu", "erasmus-plus.ec.europa.eu", "erasmusmundus.eu"
+];
+
+const COUNTRY_WORDS = {
   "united states": "USA",
   "united states of america": "USA",
   "usa": "USA",
-  "u.s.a": "USA",
-  "u.s.": "USA",
-  "america": "USA",
-
   "canada": "Canada",
-
   "australia": "Australia",
-
   "united kingdom": "Europe",
   "uk": "Europe",
   "england": "Europe",
-  "scotland": "Europe",
-  "wales": "Europe",
   "ireland": "Europe",
   "germany": "Europe",
   "france": "Europe",
@@ -71,1109 +64,557 @@ const COUNTRY_ALIASES = {
   "estonia": "Europe",
   "latvia": "Europe",
   "lithuania": "Europe",
-  "luxembourg": "Europe",
-  "malta": "Europe",
-  "cyprus": "Europe",
-  "iceland": "Europe",
   "europe": "Europe",
-  "european union": "Europe",
-  "eu": "Europe"
+  "erasmus mundus": "Europe"
 };
 
-const DOMAIN_COUNTRY = {
-  ".us": "USA",
-  ".ca": "Canada",
-  ".au": "Australia",
-
-  ".uk": "Europe",
-  ".ie": "Europe",
-  ".de": "Europe",
-  ".fr": "Europe",
-  ".it": "Europe",
-  ".es": "Europe",
-  ".pt": "Europe",
-  ".nl": "Europe",
-  ".be": "Europe",
-  ".ch": "Europe",
-  ".at": "Europe",
-  ".se": "Europe",
-  ".fi": "Europe",
-  ".no": "Europe",
-  ".dk": "Europe",
-  ".pl": "Europe",
-  ".cz": "Europe",
-  ".hu": "Europe",
-  ".gr": "Europe",
-  ".ro": "Europe",
-  ".bg": "Europe",
-  ".hr": "Europe",
-  ".si": "Europe",
-  ".sk": "Europe",
-  ".ee": "Europe",
-  ".lv": "Europe",
-  ".lt": "Europe",
-  ".lu": "Europe",
-  ".mt": "Europe",
-  ".cy": "Europe",
-  ".is": "Europe"
+const MONTHS = {
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11
 };
 
-const KNOWN_INSTITUTIONS = [
-  {
-    name: "University of Michigan",
-    patterns: ["university of michigan", "lsa.umich.edu", "umich.edu"]
-  },
-  {
-    name: "University of Oxford",
-    patterns: ["university of oxford", "ox.ac.uk"]
-  },
-  {
-    name: "University of Cambridge",
-    patterns: ["university of cambridge", "cam.ac.uk"]
-  },
-  {
-    name: "ETH Zurich",
-    patterns: ["eth zurich", "ethz.ch"]
-  },
-  {
-    name: "EPFL",
-    patterns: ["epfl", "epfl.ch"]
-  },
-  {
-    name: "University of Toronto",
-    patterns: ["university of toronto", "utoronto.ca"]
-  },
-  {
-    name: "University of British Columbia",
-    patterns: ["university of british columbia", "ubc.ca"]
-  },
-  {
-    name: "McGill University",
-    patterns: ["mcgill university", "mcgill.ca"]
-  },
-  {
-    name: "University of Melbourne",
-    patterns: ["university of melbourne", "unimelb.edu.au"]
-  },
-  {
-    name: "University of Sydney",
-    patterns: ["university of sydney", "sydney.edu.au"]
-  },
-  {
-    name: "University of Amsterdam",
-    patterns: ["university of amsterdam", "uva.nl"]
-  },
-  {
-    name: "KU Leuven",
-    patterns: ["ku leuven", "kuleuven.be"]
-  },
-  {
-    name: "Technical University of Munich",
-    patterns: ["technical university of munich", "tum.de"]
-  },
-  {
-    name: "University of Bonn",
-    patterns: ["university of bonn", "uni-bonn.de"]
-  },
-  {
-    name: "University of Helsinki",
-    patterns: ["university of helsinki", "helsinki.fi"]
-  }
-];
-
-const DIRECTORY_DOMAINS = [
-  "mastersportal.com",
-  "bachelorsportal.com",
-  "scholarshipportal.com",
-  "studyportals.com",
-  "findamasters.com",
-  "scholarshiproar.com",
-  "opportunitiesforafricans.com",
-  "scholars4dev.com",
-  "leverageedu.com",
-  "yocket.com"
-];
-
-const PROGRAMME_DOMAINS = [
-  "intermaths.eu",
-  "erasmus-plus.ec.europa.eu",
-  "erasmusmundus.eu"
-];
-
-function cleanText(value = "") {
+function clean(value = "") {
   return String(value)
-    .replace(/\s+/g, " ")
     .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function normalizeUrl(url = "") {
+function hostOf(url = "") {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function normalUrl(url = "") {
   try {
     const u = new URL(url);
     return `${u.hostname}${u.pathname}`
       .toLowerCase()
       .replace(/\/+$/, "");
   } catch {
-    return String(url).toLowerCase().trim();
+    return url.toLowerCase();
   }
 }
 
-function hostnameOf(url = "") {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return "";
-  }
+function isBlocked(url, title = "") {
+  const host = hostOf(url);
+
+  return DIRECTORY_DOMAINS.some(
+    domain => host === domain || host.endsWith("." + domain)
+  ) || /top\s+\d+|without ielts|study options|how to prove|how can you|scholarship list|guide to/i.test(title);
 }
 
-function startOfMonth(date) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-}
+function isOfficialHost(url) {
+  const host = hostOf(url);
 
-function endOfMonth(date) {
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)
-  );
-}
+  if (!host || isBlocked(url)) return false;
 
-function addMonths(date, months) {
-  return new Date(
-    Date.UTC(
-      date.getUTCFullYear(),
-      date.getUTCMonth() + months,
-      date.getUTCDate()
+  if (
+    TRUSTED_PROGRAMME_DOMAINS.some(
+      domain => host === domain || host.endsWith("." + domain)
     )
-  );
-}
-
-function formatDate(date) {
-  if (!date || Number.isNaN(date.getTime())) return null;
-
-  return date.toISOString().slice(0, 10);
-}
-
-function formatDateReadable(date) {
-  if (!date || Number.isNaN(date.getTime())) return null;
-
-  return date.toISOString().slice(0, 10);
-}
-
-function parseDateValue(value) {
-  if (!value) return null;
-
-  const parsed = new Date(value);
-
-  if (!Number.isNaN(parsed.getTime())) {
-    return new Date(
-      Date.UTC(
-        parsed.getUTCFullYear(),
-        parsed.getUTCMonth(),
-        parsed.getUTCDate()
-      )
-    );
+  ) {
+    return true;
   }
 
-  return null;
+  return /\.(edu|ac\.[a-z]{2}|edu\.[a-z]{2}|gov\.[a-z]{2})$/.test(host) ||
+    /\.(de|fr|it|es|nl|be|ch|se|fi|no|dk|at|pl|pt|ie|cz|hu|gr|ee|lt|lv|si|sk|ro|bg|hr|is)$/.test(host);
 }
 
-function monthNameToNumber(month) {
-  const months = {
-    january: 0,
-    february: 1,
-    march: 2,
-    april: 3,
-    may: 4,
-    june: 5,
-    july: 6,
-    august: 7,
-    september: 8,
-    october: 9,
-    november: 10,
-    december: 11
-  };
-
-  return months[String(month).toLowerCase()];
-}
-
-function parseHumanDate(text) {
+function parseDate(text) {
   if (!text) return null;
 
-  const value = text.toLowerCase();
-
-  // 2027-02-01
-  let match = value.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  let match = text.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
 
   if (match) {
-    return new Date(
-      Date.UTC(
-        Number(match[1]),
-        Number(match[2]) - 1,
-        Number(match[3])
-      )
-    );
+    return new Date(Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3])
+    ));
   }
 
-  // February 1, 2027
-  match = value.match(
-    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(20\d{2})\b/
+  const months = Object.keys(MONTHS).join("|");
+
+  match = text.toLowerCase().match(
+    new RegExp(`\\b(${months})\\s+(\\d{1,2})(?:st|nd|rd|th)?[,]?\\s+(20\\d{2})\\b`)
   );
 
   if (match) {
-    return new Date(
-      Date.UTC(
-        Number(match[3]),
-        monthNameToNumber(match[1]),
-        Number(match[2])
-      )
-    );
+    return new Date(Date.UTC(
+      Number(match[3]),
+      MONTHS[match[1]],
+      Number(match[2])
+    ));
   }
 
-  // 1 February 2027
-  match = value.match(
-    /\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(20\d{2})\b/
+  match = text.toLowerCase().match(
+    new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${months})\\s+(20\\d{2})\\b`)
   );
 
   if (match) {
-    return new Date(
-      Date.UTC(
-        Number(match[3]),
-        monthNameToNumber(match[2]),
-        Number(match[1])
-      )
-    );
+    return new Date(Date.UTC(
+      Number(match[3]),
+      MONTHS[match[2]],
+      Number(match[1])
+    ));
   }
 
   return null;
 }
 
-function extractDateNearLabels(text) {
-  const clean = cleanText(text);
-
-  const openingPatterns = [
-    /applications?\s+(?:open|opens|opening|start)\s*(?:on|:)?\s*([^.;|]{3,50})/i,
-    /application\s+opening\s+date\s*(?:is|:)?\s*([^.;|]{3,50})/i,
-    /application\s+opens\s*(?:on|:)?\s*([^.;|]{3,50})/i,
-    /applications?\s+open\s+from\s*([^.;|]{3,50})/i,
-    /open(?:ing)?\s+date\s*(?:is|:)?\s*([^.;|]{3,50})/i,
-    /application\s+period\s*(?:is|:)?\s*([^.;|]{3,80})/i
-  ];
-
-  const closingPatterns = [
-    /applications?\s+(?:close|closes|closing)\s*(?:on|:)?\s*([^.;|]{3,50})/i,
-    /application\s+deadline\s*(?:is|:)?\s*([^.;|]{3,60})/i,
-    /deadline\s*(?:is|:)?\s*([^.;|]{3,60})/i,
-    /apply\s+by\s*([^.;|]{3,60})/i,
-    /last\s+date\s+(?:to\s+apply|for\s+application)\s*(?:is|:)?\s*([^.;|]{3,60})/i
-  ];
-
-  let openingDate = null;
-  let closingDate = null;
-
-  for (const pattern of openingPatterns) {
-    const match = clean.match(pattern);
+function findDate(text, patterns) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
 
     if (match) {
-      const date = parseHumanDate(match[1]);
-
-      if (date) {
-        openingDate = date;
-        break;
-      }
+      const date = parseDate(match[1]);
+      if (date) return date;
     }
   }
 
-  for (const pattern of closingPatterns) {
-    const match = clean.match(pattern);
-
-    if (match) {
-      const date = parseHumanDate(match[1]);
-
-      if (date) {
-        closingDate = date;
-        break;
-      }
-    }
-  }
-
-  // Fall back to finding dates after keywords in nearby text.
-  if (!openingDate) {
-    const index = clean.toLowerCase().search(
-      /application|admission|apply|opening/
-    );
-
-    if (index >= 0) {
-      const nearby = clean.slice(index, index + 300);
-      openingDate = parseHumanDate(nearby);
-    }
-  }
-
-  if (!closingDate) {
-    const index = clean.toLowerCase().search(
-      /deadline|close|closing|apply by|last date/
-    );
-
-    if (index >= 0) {
-      const nearby = clean.slice(index, index + 300);
-      closingDate = parseHumanDate(nearby);
-    }
-  }
-
-  return {
-    openingDate,
-    closingDate
-  };
+  return null;
 }
 
-function hasExplicitOpenLanguage(text) {
-  const lower = cleanText(text).toLowerCase();
+function extractDates(text) {
+  const open = findDate(text, [
+    /applications?\s+(?:open|opens|opening)\s*(?:on|from|:)?\s*([^.;|]{3,65})/i,
+    /application\s+opening\s+date\s*(?:is|:)?\s*([^.;|]{3,65})/i,
+    /open(?:ing)?\s+date\s*(?:is|:)?\s*([^.;|]{3,65})/i
+  ]);
 
-  const patterns = [
-    "applications are open",
-    "application is open",
-    "applications open now",
-    "apply now",
-    "currently accepting applications",
-    "now accepting applications",
-    "the call is open",
-    "call for applications is open",
-    "applications are currently open",
-    "admissions are open"
-  ];
+  const close = findDate(text, [
+    /application\s+deadline\s*(?:is|:)?\s*([^.;|]{3,65})/i,
+    /applications?\s+(?:close|closes|closing)\s*(?:on|:)?\s*([^.;|]{3,65})/i,
+    /deadline\s*(?:is|:)?\s*([^.;|]{3,65})/i,
+    /apply\s+by\s*([^.;|]{3,65})/i
+  ]);
 
-  return patterns.some((p) => lower.includes(p));
+  return { open, close };
 }
 
-function getApplicationStatus(openingDate, closingDate, text, windowEnd) {
-  const today = startOfMonth(TODAY);
-  const currentDay = new Date(
-    Date.UTC(
-      TODAY.getUTCFullYear(),
-      TODAY.getUTCMonth(),
-      TODAY.getUTCDate()
-    )
-  );
-
-  if (closingDate && closingDate < currentDay) {
-    return "CLOSED";
-  }
-
-  if (openingDate && openingDate > windowEnd) {
-    return "OPENING SOON — outside current search window";
-  }
-
-  if (
-    openingDate &&
-    openingDate <= currentDay &&
-    (!closingDate || closingDate >= currentDay)
-  ) {
-    if (
-      closingDate &&
-      closingDate <= addMonths(currentDay, 1)
-    ) {
-      return "CLOSING SOON — deadline approaching";
-    }
-
-    return "OPEN NOW";
-  }
-
-  if (
-    openingDate &&
-    openingDate > currentDay &&
-    openingDate <= windowEnd
-  ) {
-    return "OPENING SOON";
-  }
-
-  if (!openingDate && closingDate && closingDate >= currentDay) {
-    if (hasExplicitOpenLanguage(text)) {
-      if (closingDate <= addMonths(currentDay, 1)) {
-        return "CLOSING SOON — deadline approaching";
-      }
-
-      return "OPEN NOW — opening date not confirmed";
-    }
-
-    return "Possibly open — opening date not confirmed";
-  }
-
-  if (!openingDate && !closingDate && hasExplicitOpenLanguage(text)) {
-    return "Possibly open — dates not fully confirmed";
-  }
-
-  return "Dates unconfirmed";
+function dateString(date) {
+  return date ? date.toISOString().slice(0, 10) : null;
 }
 
-function isWithinSearchRule(openingDate, closingDate, status, windowStart, windowEnd) {
-  const currentDay = new Date(
-    Date.UTC(
-      TODAY.getUTCFullYear(),
-      TODAY.getUTCMonth(),
-      TODAY.getUTCDate()
-    )
-  );
+function countryFrom(text, url) {
+  const lower = `${text} ${url}`.toLowerCase();
 
-  // Known opening date inside the requested three-month window.
-  if (
-    openingDate &&
-    openingDate >= windowStart &&
-    openingDate <= windowEnd
-  ) {
-    return true;
+  for (const [word, country] of Object.entries(COUNTRY_WORDS)) {
+    if (lower.includes(word)) return country;
   }
 
-  // Already opened and still open today.
-  if (
-    openingDate &&
-    openingDate < windowStart &&
-    (!closingDate || closingDate >= currentDay)
-  ) {
-    return true;
-  }
+  const host = hostOf(url);
 
-  // No opening date, but a future deadline or explicit open language.
-  if (
-    !openingDate &&
-    (
-      (closingDate && closingDate >= currentDay) ||
-      hasExplicitOpenLanguage(status)
-    )
-  ) {
-    return true;
-  }
+  if (host.endsWith(".ca")) return "Canada";
+  if (host.endsWith(".au")) return "Australia";
+  if (host.endsWith(".us")) return "USA";
 
-  // Unknown dates are kept as discovery leads so the user can inspect them.
-  if (!openingDate && !closingDate) {
-    return true;
-  }
-
-  return false;
-}
-
-function detectCountry(text, url) {
-  const lower = `${cleanText(text)} ${url}`.toLowerCase();
-
-  // Check explicit country names first.
-  const countryEntries = Object.entries(COUNTRY_ALIASES)
-    .sort((a, b) => b[0].length - a[0].length);
-
-  for (const [alias, country] of countryEntries) {
-    const regex = new RegExp(
-      `\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-      "i"
-    );
-
-    if (regex.test(lower)) {
-      return country;
-    }
-  }
-
-  const hostname = hostnameOf(url);
-
-  for (const [suffix, country] of Object.entries(DOMAIN_COUNTRY)) {
-    if (hostname.endsWith(suffix)) {
-      return country;
-    }
-  }
-
-  if (
-    lower.includes("erasmus mundus") ||
-    lower.includes("erasmus+") ||
-    lower.includes("european master's") ||
-    lower.includes("european master")
-  ) {
+  if (/\.(uk|de|fr|it|es|nl|be|ch|se|fi|no|dk|at|pl|pt|ie)$/.test(host)) {
     return "Europe";
   }
 
   return "Not confirmed";
 }
 
-function detectInstitution(text, url) {
-  const lower = `${cleanText(text)} ${url}`.toLowerCase();
+function institutionFrom(text) {
+  const known = [
+    ["University of Michigan", /university of michigan|umich\.edu/i],
+    ["University of Oxford", /university of oxford|ox\.ac\.uk/i],
+    ["University of Cambridge", /university of cambridge|cam\.ac\.uk/i],
+    ["ETH Zurich", /eth zurich|ethz\.ch/i],
+    ["EPFL", /\bepfl\b/i],
+    ["University of Toronto", /university of toronto|utoronto\.ca/i],
+    ["University of British Columbia", /university of british columbia|ubc\.ca/i],
+    ["McGill University", /mcgill university|mcgill\.ca/i],
+    ["University of Melbourne", /university of melbourne|unimelb\.edu\.au/i],
+    ["University of Sydney", /university of sydney|sydney\.edu\.au/i]
+  ];
 
-  for (const institution of KNOWN_INSTITUTIONS) {
-    if (
-      institution.patterns.some((pattern) =>
-        lower.includes(pattern.toLowerCase())
-      )
-    ) {
-      return institution.name;
-    }
+  for (const [name, pattern] of known) {
+    if (pattern.test(text)) return name;
   }
 
-  // Common patterns.
-  let match = text.match(
-    /\b(University of [A-Z][A-Za-z&' -]+(?:University)?)/i
+  const match = text.match(
+    /\b(?:University of [A-Z][A-Za-z&' -]{2,55}|[A-Z][A-Za-z&' -]{2,45} University)\b/
   );
 
-  if (match) {
-    return cleanText(match[1]);
-  }
-
-  match = text.match(
-    /\b([A-Z][A-Za-z&' -]+ University)\b/
-  );
-
-  if (match) {
-    return cleanText(match[1]);
-  }
-
-  return "Institution not confirmed";
+  return match ? clean(match[0]) : "Institution not confirmed";
 }
 
-function detectEnglish(text) {
-  const lower = cleanText(text).toLowerCase();
+function fundingFrom(text) {
+  const t = text.toLowerCase();
 
-  const moi =
-    lower.includes("medium of instruction") ||
-    lower.includes("moi accepted") ||
-    lower.includes("english as medium of instruction") ||
-    lower.includes("proof of english") && lower.includes("medium");
+  if (/self[- ]funded|students must pay tuition|no funding is available|does not provide funding|no financial support/.test(t)) {
+    return {
+      status: "Self-funded",
+      detail: "Self-funded; confirm tuition and funding terms on the official page."
+    };
+  }
 
-  const waiver =
-    lower.includes("english waiver") ||
-    lower.includes("english proficiency waiver") ||
-    lower.includes("ielts waiver") ||
-    lower.includes("toefl waiver") ||
-    lower.includes("may be waived") ||
-    lower.includes("exempt from english");
+  if (/fully funded|full scholarship|full funding|tuition.{0,35}(covered|waived)|participation costs are covered|tuition and living expenses|monthly stipend|stipend of/.test(t)) {
+    return {
+      status: "Fully funded / scholarship available",
+      detail: "Funding is mentioned; confirm exact coverage and eligibility on the official page."
+    };
+  }
 
-  const ielts =
-    lower.includes("ielts") ||
-    lower.includes("toefl") ||
-    lower.includes("pte academic") ||
-    lower.includes("cambridge english");
+  if (/partial scholarship|partial funding|tuition waiver|fee waiver|scholarship covers part/.test(t)) {
+    return {
+      status: "Tuition waiver / partial funding",
+      detail: "Partial funding or a waiver is mentioned; confirm exact coverage."
+    };
+  }
 
-  if (moi) {
+  return {
+    status: "Funding not confirmed",
+    detail: "Funding not confirmed"
+  };
+}
+
+function englishFrom(text) {
+  const t = text.toLowerCase();
+
+  if (/medium of instruction|\bmoi\b|english as medium of instruction/.test(t)) {
     return "MOI / English-medium evidence mentioned";
   }
 
-  if (waiver) {
+  if (/english.{0,30}waiver|ielts waiver|toefl waiver|exempt from english/.test(t)) {
     return "English-test waiver possible";
   }
 
-  if (ielts) {
+  if (/ielts|toefl|pte academic|cambridge english/.test(t)) {
     return "IELTS/TOEFL or other English test mentioned";
   }
 
   return "Not confirmed";
 }
 
-function detectApplicationFee(text) {
-  const lower = cleanText(text).toLowerCase();
+function feeFrom(text) {
+  const t = text.toLowerCase();
 
-  if (
-    lower.includes("no application fee") ||
-    lower.includes("no application fees") ||
-    lower.includes("there is no application fee") ||
-    lower.includes("free to apply") ||
-    lower.includes("application is free")
-  ) {
-    return {
-      status: "No application fee",
-      amount: null
-    };
+  if (/no application fee|free to apply|application is free/.test(t)) {
+    return "No application fee";
   }
 
-  if (
-    lower.includes("application fee waiver") ||
-    lower.includes("fee waiver available") ||
-    lower.includes("application fee may be waived") ||
-    lower.includes("waive the application fee")
-  ) {
-    return {
-      status: "Fee waiver available",
-      amount: null
-    };
+  if (/application fee waiver|fee waiver available|waive the application fee/.test(t)) {
+    return "Fee waiver available";
   }
 
-  const feeMatch = lower.match(
+  const match = t.match(
     /application fee[^$€£\d]{0,20}([$€£]\s?\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s?(?:usd|eur|gbp|cad|aud))/i
   );
 
-  if (feeMatch) {
-    return {
-      status: "Application fee required",
-      amount: feeMatch[1]
-    };
+  if (match) {
+    return `Application fee required: ${match[1]}`;
   }
 
-  if (
-    lower.includes("application fee") &&
-    !lower.includes("no application fee")
-  ) {
-    return {
-      status: "Application fee mentioned — check exact amount",
-      amount: null
-    };
+  if (/application fee/.test(t)) {
+    return "Application fee mentioned — amount not confirmed";
   }
 
-  return {
-    status: "Unknown — not confirmed",
-    amount: null
-  };
+  return "Unknown — not confirmed";
 }
 
-function detectFunding(text) {
-  const lower = cleanText(text).toLowerCase();
+function isSpecificMasters(title, content) {
+  const t = `${title} ${content}`.toLowerCase();
 
-  const fullyFundedPatterns = [
-    "fully funded",
-    "full scholarship",
-    "full funding",
-    "fully-funded",
-    "full tuition scholarship",
-    "tuition fees are covered",
-    "tuition fee is covered",
-    "tuition is covered",
-    "tuition costs are covered",
-    "tuition and living expenses",
-    "tuition and stipend",
-    "monthly stipend",
-    "monthly scholarship",
-    "stipend of",
-    "scholarship recipients do not pay",
-    "participation costs are covered"
-  ];
+  const hasMasters =
+    /\b(master|masters|msc|m\.sc|m\.s\.|ms degree|graduate degree|postgraduate)\b/.test(t);
 
-  const partialPatterns = [
-    "partial scholarship",
-    "partial funding",
-    "partial tuition",
-    "tuition waiver",
-    "fee waiver",
-    "scholarship covers part",
-    "up to $",
-    "up to €",
-    "up to £",
-    "financial support may be available",
-    "funding may be available"
-  ];
+  const hasSubject =
+    /mathemat|statistic|data science|data analytics|computational|operations research|machine learning|artificial intelligence/.test(t);
 
-  const selfFundedPatterns = [
-    "self-funded",
-    "self funded",
-    "students are responsible for tuition",
-    "students must pay tuition",
-    "no funding is available",
-    "no financial support",
-    "does not provide funding",
-    "does not offer funding",
-    "not funded",
-    "without funding",
-    "funding is not provided"
-  ];
+  const generic =
+    /without ielts|top \d+|study options|how to apply|how can you prove|scholarship list|best scholarships/.test(title.toLowerCase());
 
-  if (selfFundedPatterns.some((p) => lower.includes(p))) {
-    return {
-      status: "Self-funded",
-      scholarship: "No programme funding confirmed — self-funded"
-    };
-  }
-
-  if (fullyFundedPatterns.some((p) => lower.includes(p))) {
-    return {
-      status: "Fully funded / scholarship available",
-      scholarship: extractFundingEvidence(text)
-    };
-  }
-
-  if (partialPatterns.some((p) => lower.includes(p))) {
-    return {
-      status: "Tuition waiver / partial funding",
-      scholarship: extractFundingEvidence(text)
-    };
-  }
-
-  return {
-    status: "Funding not confirmed",
-    scholarship: "Funding not confirmed"
-  };
+  return hasMasters && hasSubject && !generic;
 }
 
-function extractFundingEvidence(text) {
-  const clean = cleanText(text);
+function dateStatus(open, close, text, windowEnd) {
+  const now = new Date();
 
-  const patterns = [
-    /(?:fully funded|full scholarship|full funding)[^.!?]{0,180}[.!?]/i,
-    /(?:monthly stipend|monthly scholarship|stipend of)[^.!?]{0,180}[.!?]/i,
-    /(?:tuition.{0,40}(?:covered|waived))[^.!?]{0,180}[.!?]/i,
-    /(?:scholarship.{0,50}(?:covers|provides|includes))[^.!?]{0,180}[.!?]/i
-  ];
+  const today = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate()
+  ));
 
-  for (const pattern of patterns) {
-    const match = clean.match(pattern);
+  if (close && close < today) return "CLOSED";
 
-    if (match) {
-      return match[0].trim();
-    }
+  if (open && open > windowEnd) return "Outside search window";
+
+  if (open && open <= today && close && close >= today) {
+    const soon = new Date(today);
+    soon.setDate(soon.getDate() + 30);
+
+    return close <= soon
+      ? "CLOSING SOON — deadline approaching"
+      : "OPEN NOW";
   }
 
-  return "Scholarship/funding mentioned — check official source for exact coverage";
+  if (open && open <= today && !close) {
+    return /applications are open|apply now|currently accepting applications|call is open/i.test(text)
+      ? "Possibly open — closing date not confirmed"
+      : "Dates unconfirmed";
+  }
+
+  if (open && open > today && open <= windowEnd) {
+    return "OPENING SOON";
+  }
+
+  if (!open && close && close >= today) {
+    return /applications are open|apply now|currently accepting applications|call is open/i.test(text)
+      ? "Possibly open — opening date not confirmed"
+      : "Dates unconfirmed";
+  }
+
+  return "Dates unconfirmed";
 }
 
-function detectTuition(text) {
-  const clean = cleanText(text);
-
-  const patterns = [
-    /tuition[^.!?]{0,120}([$€£]\s?\d[\d,]*(?:\.\d+)?[^.!?]*)/i,
-    /fees?[^.!?]{0,120}([$€£]\s?\d[\d,]*(?:\.\d+)?[^.!?]*)/i,
-    /cost[^.!?]{0,120}([$€£]\s?\d[\d,]*(?:\.\d+)?[^.!?]*)/i
-  ];
-
-  for (const pattern of patterns) {
-    const match = clean.match(pattern);
-
-    if (match) {
-      return match[0].trim();
-    }
-  }
-
-  return "Not confirmed";
-}
-
-function detectProgrammeStart(text) {
-  const clean = cleanText(text);
-
-  const patterns = [
-    /(?:programme|program|course|degree|studies)[^.!?]{0,80}(?:starts?|begin)[^.!?]{0,80}/i,
-    /(?:starting|starts?)\s+(?:in|on)\s+(?:september|october|january|february|march|april|may|june|july|august)/i
-  ];
-
-  for (const pattern of patterns) {
-    const match = clean.match(pattern);
-
-    if (match) {
-      return match[0].trim();
-    }
-  }
-
-  return "Not confirmed";
-}
-
-function classifySource(url) {
-  const host = hostnameOf(url);
-
-  if (!host) {
-    return "Other source — official status not confirmed";
-  }
-
-  if (
-    PROGRAMME_DOMAINS.some((domain) => host.includes(domain))
-  ) {
-    return "Potential official programme source";
-  }
-
-  if (
-    DIRECTORY_DOMAINS.some((domain) => host.includes(domain))
-  ) {
-    return "Scholarship directory or information website";
-  }
-
-  if (
-    host.endsWith(".edu") ||
-    host.includes(".edu.") ||
-    host.endsWith(".ac.uk") ||
-    host.endsWith(".ac.au") ||
-    host.endsWith(".ac.nz")
-  ) {
-    return "Potential official institution source";
-  }
-
-  return "Other source — official status not confirmed";
-}
-
-function detectRegion(country) {
-  if (
-    country === "Europe" ||
-    country === "USA" ||
-    country === "Canada" ||
-    country === "Australia"
-  ) {
-    return country;
-  }
-
-  return "Other";
-}
-
-function extractSubject(title, text, searchedSubject) {
-  const combined = `${title} ${text}`.toLowerCase();
-
-  const matches = SUBJECTS.filter((subject) =>
-    combined.includes(subject.toLowerCase())
-  );
-
-  if (matches.length > 0) {
-    return matches[0];
-  }
-
-  return searchedSubject;
-}
-
-function isRelevantResult(title, content, searchedSubject) {
-  const text = `${title} ${content}`.toLowerCase();
-
-  const master'sTerms = [
-    "master",
-    "msc",
-    "m.sc",
-    "ms ",
-    "m.s.",
-    "graduate",
-    "postgraduate",
-    "ma ",
-    "m.a."
-  ];
-
-  const subjectTerms = [
-    "mathematics",
-    "statistics",
-    "data science",
-    "data analytics",
-    "mathematical",
-    "computational",
-    "operations research",
-    "machine learning",
-    "artificial intelligence"
-  ];
-
-  const hasMasters = master'sTerms.some((term) => text.includes(term));
-  const hasSubject = subjectTerms.some((term) => text.includes(term));
-
-  return hasMasters && hasSubject;
-}
-
-function buildSearchQueries(subject, region, windowStart, windowEnd) {
-  const regionText =
-    region === "all"
-      ? "Europe OR USA OR Canada OR Australia"
-      : region;
-
-  const start = formatDate(windowStart);
-  const end = formatDate(windowEnd);
-
-  return [
-    `"${subject}" master's scholarship application opens ${start} ${end} ${regionText}`,
-    `"${subject}" MSc scholarship "application deadline" ${regionText}`,
-    `"${subject}" master's "applications are open" scholarship ${regionText}`,
-    `"${subject}" Erasmus Mundus scholarship master's ${regionText}`,
-    `"${subject}" graduate scholarship tuition funding ${regionText}`
-  ];
-}
-
-async function tavilySearch(query) {
-  const apiKey = process.env.TAVILY_API_KEY;
-
-  if (!apiKey) {
+async function tavily(endpoint, body) {
+  if (!process.env.TAVILY_API_KEY) {
     throw new Error("TAVILY_API_KEY is not configured");
   }
 
-  const response = await fetch("https://api.tavily.com/search", {
+  const response = await fetch(`https://api.tavily.com/${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      api_key: apiKey,
-      query,
-      search_depth: "advanced",
-      max_results: 8,
-      include_answer: false,
-      include_raw_content: true
+      api_key: process.env.TAVILY_API_KEY,
+      ...body
     })
   });
 
   if (!response.ok) {
-    const body = await response.text();
-
     throw new Error(
-      `Tavily request failed (${response.status}): ${body.slice(0, 500)}`
+      `Tavily ${endpoint} failed (${response.status}): ${(await response.text()).slice(0, 250)}`
     );
   }
 
   return response.json();
 }
 
-function makeResult(item, searchedSubject, windowStart, windowEnd) {
-  const title = cleanText(item.title || "");
-  const content = cleanText(
-    `${item.content || ""} ${item.raw_content || ""}`
-  );
-
-  const url = item.url || "";
-
-  const combinedText = `${title} ${content}`;
-
-  const dates = extractDateNearLabels(combinedText);
-
-  const status = getApplicationStatus(
-    dates.openingDate,
-    dates.closingDate,
-    combinedText,
-    windowEnd
-  );
-
-  const country = detectCountry(combinedText, url);
-  const region = detectRegion(country);
-  const institution = detectInstitution(combinedText, url);
-
-  const funding = detectFunding(combinedText);
-  const applicationFee = detectApplicationFee(combinedText);
-
-  const includeByDateRule = isWithinSearchRule(
-    dates.openingDate,
-    dates.closingDate,
-    combinedText,
-    windowStart,
-    windowEnd
-  );
-
-  return {
-    id: normalizeUrl(url),
-
-    title,
-
-    university: institution,
-
-    institution,
-
-    programme: title,
-
-    subject: extractSubject(
-      title,
-      content,
-      searchedSubject
-    ),
-
-    country,
-
-    region,
-
-    applicationOpeningDate: formatDateReadable(
-      dates.openingDate
-    ),
-
-    applicationClosingDate: formatDateReadable(
-      dates.closingDate
-    ),
-
-    applicationStatus: status,
-
-    programmeStart: detectProgrammeStart(combinedText),
-
-    tuition: detectTuition(combinedText),
-
-    fundingStatus: funding.status,
-
-    scholarship: funding.scholarship,
-
-    english: detectEnglish(combinedText),
-
-    applicationFee: applicationFee.status,
-
-    applicationFeeAmount: applicationFee.amount,
-
-    sourceType: classifySource(url),
-
-    officialLink: url,
-
-    sourceLink: url,
-
-    description:
-      cleanText(item.content || "") ||
-      "Programme information found in search results.",
-
-    verification:
-      "Search result information is not independently verified. Check the official programme/university page before applying.",
-
-    includeByDateRule,
-
-    searchRelevance: item.score ?? null
-  };
+async function searchWeb(query, depth = "basic", max = 6) {
+  return tavily("search", {
+    query,
+    search_depth: depth,
+    max_results: max,
+    include_answer: false,
+    include_raw_content: true
+  });
 }
 
-function deduplicateResults(results) {
-  const map = new Map();
+function matchScore(programme, title, content) {
+  const terms = clean(programme)
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(word =>
+      word.length > 3 &&
+      !["master", "masters", "programme", "program", "university", "admission"].includes(word)
+    );
 
-  for (const result of results) {
-    const key =
-      result.id ||
-      `${result.institution}-${result.title}-${result.country}`
-        .toLowerCase();
+  if (!terms.length) return 0;
 
-    const existing = map.get(key);
+  const hay = `${title} ${content}`.toLowerCase();
 
-    if (!existing) {
-      map.set(key, result);
-      continue;
-    }
+  return terms.filter(word => hay.includes(word)).length / terms.length;
+}
 
-    // Prefer results with actual dates.
-    const existingDateCount =
-      Number(Boolean(existing.applicationOpeningDate)) +
-      Number(Boolean(existing.applicationClosingDate));
+async function verifyOfficial(result) {
+  const institution =
+    result.institution !== "Institution not confirmed"
+      ? result.institution
+      : "";
 
-    const newDateCount =
-      Number(Boolean(result.applicationOpeningDate)) +
-      Number(Boolean(result.applicationClosingDate));
+  const query = `"${result.programme}" ${institution} official university programme admissions`;
 
-    if (newDateCount > existingDateCount) {
-      map.set(key, result);
-    }
+  const candidates = [];
+
+  if (isOfficialHost(result.sourceLink)) {
+    candidates.push({
+      title: result.programme,
+      url: result.sourceLink,
+      content: result.description || ""
+    });
   }
 
-  return Array.from(map.values());
+  try {
+    const found = await searchWeb(query, "basic", 5);
+
+    for (const item of found.results || []) {
+      if (isOfficialHost(item.url)) {
+        candidates.push({
+          title: clean(item.title),
+          url: item.url,
+          content: clean(item.content)
+        });
+      }
+    }
+  } catch (error) {
+    console.warn("Official search error:", error.message);
+  }
+
+  const unique = [
+    ...new Map(candidates.map(item => [normalUrl(item.url), item])).values()
+  ];
+
+  unique.sort((a, b) =>
+    matchScore(result.programme, b.title, b.content) -
+    matchScore(result.programme, a.title, a.content)
+  );
+
+  const chosen = unique.find(
+    item => matchScore(result.programme, item.title, item.content) >= 0.25
+  );
+
+  if (!chosen) {
+    return {
+      verificationStatus: "Not verified",
+      officialUniversityLink: null,
+      verification: "No sufficiently matching official university or programme-provider page was found. Treat this result as unverified."
+    };
+  }
+
+  let officialContent = chosen.content || "";
+
+  try {
+    const extracted = await tavily("extract", {
+      urls: [chosen.url],
+      extract_depth: "basic",
+      format: "text"
+    });
+
+    if (extracted.results?.[0]?.raw_content) {
+      officialContent = clean(extracted.results[0].raw_content);
+    }
+  } catch (error) {
+    console.warn("Official page extraction error:", error.message);
+  }
+
+  const score = matchScore(
+    result.programme,
+    chosen.title,
+    officialContent
+  );
+
+  if (score < 0.25) {
+    return {
+      verificationStatus: "Partially verified",
+      officialUniversityLink: chosen.url,
+      verification: "An official-looking institution page was found, but the programme match could not be fully confirmed."
+    };
+  }
+
+  const dates = extractDates(officialContent);
+  const funding = fundingFrom(officialContent);
+
+  return {
+    verificationStatus: "Verified",
+    officialUniversityLink: chosen.url,
+    officialPageTitle: chosen.title,
+    verification: "The programme was matched against an official university or programme-provider page. Details are confirmed only where that page provides supporting information.",
+    officialEvidence: {
+      opening: dateString(dates.open),
+      closing: dateString(dates.close),
+      fundingStatus: funding.status,
+      scholarship: funding.detail,
+      english: englishFrom(officialContent),
+      applicationFee: feeFrom(officialContent)
+    }
+  };
 }
 
-function sortResults(results) {
-  const fundingRank = {
-    "Fully funded / scholarship available": 1,
-    "Tuition waiver / partial funding": 2,
-    "Funding not confirmed": 3,
-    "Self-funded": 4
+function regionFor(country) {
+  return ["Europe", "USA", "Canada", "Australia"].includes(country)
+    ? country
+    : "Other";
+}
+
+function formatResult(item) {
+  const title = clean(item.title || "");
+  const description = clean(item.content || "");
+  const combined = `${title}. ${description}`;
+
+  const dates = extractDates(combined);
+  const country = countryFrom(combined, item.url);
+  const funding = fundingFrom(combined);
+  const institution = institutionFrom(combined);
+
+  return {
+    title,
+    programme: title,
+    university: institution,
+    institution,
+    country,
+    region: regionFor(country),
+
+    applicationOpeningDate: dateString(dates.open),
+    applicationClosingDate: dateString(dates.close),
+    applicationStatus: dateStatus(
+      dates.open,
+      dates.close,
+      combined,
+      windowEndDate()
+    ),
+
+    programmeStart: "Not confirmed",
+    start: "Not confirmed",
+    tuition: "Not confirmed",
+
+    fundingStatus: funding.status,
+    scholarship: funding.detail,
+    english: englishFrom(combined),
+    applicationFee: feeFrom(combined),
+
+    sourceType: isOfficialHost(item.url)
+      ? "Potential official institution/programme source"
+      : "Discovery source — not an official page",
+
+    sourceLink: item.url,
+    officialLink: null,
+    officialUniversityLink: null,
+
+    verificationStatus: "Not checked",
+    description: description || "No description supplied by search provider.",
+    verification: "Awaiting official-page check."
   };
+}
 
-  const englishRank = {
-    "MOI / English-medium evidence mentioned": 1,
-    "English-test waiver possible": 2,
-    "IELTS/TOEFL or other English test mentioned": 3,
-    "Not confirmed": 4
-  };
+function windowStartDate() {
+  const now = new Date();
 
-  const statusRank = {
-    "OPEN NOW": 1,
-    "CLOSING SOON — deadline approaching": 2,
-    "OPEN NOW — opening date not confirmed": 2,
-    "OPENING SOON": 3,
-    "Possibly open — opening date not confirmed": 4,
-    "Possibly open — dates not fully confirmed": 4,
-    "Dates unconfirmed": 5,
-    "CLOSED": 6
-  };
+  return new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    1
+  ));
+}
 
-  return [...results].sort((a, b) => {
-    const aFunding = fundingRank[a.fundingStatus] || 5;
-    const bFunding = fundingRank[b.fundingStatus] || 5;
+function windowEndDate() {
+  const now = new Date();
 
-    if (aFunding !== bFunding) {
-      return aFunding - bFunding;
-    }
-
-    const aEnglish = englishRank[a.english] || 5;
-    const bEnglish = englishRank[b.english] || 5;
-
-    if (aEnglish !== bEnglish) {
-      return aEnglish - bEnglish;
-    }
-
-    const aStatus = statusRank[a.applicationStatus] || 5;
-    const bStatus = statusRank[b.applicationStatus] || 5;
-
-    if (aStatus !== bStatus) {
-      return aStatus - bStatus;
-    }
-
-    return (b.searchRelevance || 0) - (a.searchRelevance || 0);
-  });
+  return new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth() + 3,
+    0
+  ));
 }
 
 app.get("/api/health", (req, res) => {
@@ -1186,64 +627,55 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/search", async (req, res) => {
   try {
-    const subject = cleanText(req.query.q || "Mathematics");
-    const selectedRegion = cleanText(
-      req.query.region || "all"
-    );
+    const subject = clean(req.query.q || "Mathematics");
+    const selectedRegion = clean(req.query.region || "all");
 
-    const windowStart = startOfMonth(TODAY);
-    const windowEnd = endOfMonth(addMonths(TODAY, 2));
+    const start = windowStartDate();
+    const end = windowEndDate();
 
-    const queries = buildSearchQueries(
-      subject,
-      selectedRegion,
-      windowStart,
-      windowEnd
-    );
+    const startText = dateString(start);
+    const endText = dateString(end);
 
-    const allResults = [];
+    const queries = [
+      `"${subject}" master's scholarship application admissions ${startText} ${endText} Europe USA Canada Australia`,
+      `"${subject}" MSc official university admissions scholarship funding 2027`,
+      `"${subject}" Erasmus Mundus joint master scholarship`,
+      `"${subject}" master's programme application opening date university`
+    ];
+
+    const gathered = [];
     const failedSearches = [];
 
     for (const query of queries) {
       try {
-        const data = await tavilySearch(query);
+        const data = await searchWeb(query, "advanced", 8);
 
-        const results = Array.isArray(data.results)
-          ? data.results
-          : [];
-
-        for (const item of results) {
-          try {
-            if (
-              !isRelevantResult(
-                item.title || "",
-                item.content || "",
-                subject
-              )
-            ) {
-              continue;
-            }
-
-            const result = makeResult(
-              item,
-              subject,
-              windowStart,
-              windowEnd
-            );
-
-            if (selectedRegion !== "all") {
-              if (result.region !== selectedRegion) {
-                continue;
-              }
-            }
-
-            allResults.push(result);
-          } catch (error) {
-            console.error(
-              "Could not process search result:",
-              error.message
-            );
+        for (const item of data.results || []) {
+          if (isBlocked(item.url || "", item.title || "")) {
+            continue;
           }
+
+          if (!isSpecificMasters(item.title || "", item.content || "")) {
+            continue;
+          }
+
+          const result = formatResult(item);
+
+          if (
+            selectedRegion !== "all" &&
+            result.region !== selectedRegion
+          ) {
+            continue;
+          }
+
+          if (
+            result.applicationStatus === "CLOSED" ||
+            result.applicationStatus === "Outside search window"
+          ) {
+            continue;
+          }
+
+          gathered.push(result);
         }
       } catch (error) {
         failedSearches.push({
@@ -1253,95 +685,130 @@ app.get("/api/search", async (req, res) => {
       }
     }
 
-    let results = deduplicateResults(allResults);
+    const deduped = [
+      ...new Map(
+        gathered.map(result => [normalUrl(result.sourceLink), result])
+      ).values()
+    ];
 
-    // Remove results that are definitely outside the search rule.
-    results = results.filter((result) => {
-      if (result.applicationStatus === "CLOSED") {
-        return false;
-      }
+    deduped.sort((a, b) => {
+      const rank = status => {
+        if (status.includes("Fully funded")) return 0;
+        if (status.includes("partial")) return 1;
+        if (status.includes("Self-funded")) return 3;
+        return 2;
+      };
 
-      if (
-        result.applicationOpeningDate &&
-        result.applicationOpeningDate > formatDate(windowEnd)
-      ) {
-        return false;
-      }
-
-      return result.includeByDateRule !== false;
+      return rank(a.fundingStatus) - rank(b.fundingStatus);
     });
 
-    results = sortResults(results);
+    // Verify a limited shortlist to control search credits and response time.
+    const shortlist = deduped.slice(0, 8);
+    const results = [];
+
+    for (const result of shortlist) {
+      const verification = await verifyOfficial(result);
+
+      Object.assign(result, verification);
+
+      if (verification.officialEvidence) {
+        const evidence = verification.officialEvidence;
+
+        if (evidence.opening) {
+          result.applicationOpeningDate = evidence.opening;
+        }
+
+        if (evidence.closing) {
+          result.applicationClosingDate = evidence.closing;
+        }
+
+        if (
+          evidence.fundingStatus &&
+          evidence.fundingStatus !== "Funding not confirmed"
+        ) {
+          result.fundingStatus = evidence.fundingStatus;
+        }
+
+        if (evidence.scholarship) {
+          result.scholarship = evidence.scholarship;
+        }
+
+        if (
+          evidence.english &&
+          evidence.english !== "Not confirmed"
+        ) {
+          result.english = evidence.english;
+        }
+
+        if (
+          evidence.applicationFee &&
+          !evidence.applicationFee.startsWith("Unknown")
+        ) {
+          result.applicationFee = evidence.applicationFee;
+        }
+
+        // Recalculate status after official dates replace discovery dates.
+        const officialOpen = evidence.opening
+          ? new Date(`${evidence.opening}T00:00:00Z`)
+          : result.applicationOpeningDate
+            ? new Date(`${result.applicationOpeningDate}T00:00:00Z`)
+            : null;
+
+        const officialClose = evidence.closing
+          ? new Date(`${evidence.closing}T00:00:00Z`)
+          : result.applicationClosingDate
+            ? new Date(`${result.applicationClosingDate}T00:00:00Z`)
+            : null;
+
+        result.applicationStatus = dateStatus(
+          officialOpen,
+          officialClose,
+          result.description,
+          end
+        );
+      }
+
+      results.push(result);
+    }
 
     const counts = {
       total: results.length,
-
-      openNow: results.filter((r) =>
-        r.applicationStatus.startsWith("OPEN NOW")
+      openNow: results.filter(result =>
+        result.applicationStatus.startsWith("OPEN NOW")
       ).length,
-
-      closingSoon: results.filter((r) =>
-        r.applicationStatus.startsWith("CLOSING SOON")
+      openingSoon: results.filter(result =>
+        result.applicationStatus === "OPENING SOON"
       ).length,
-
-      openingSoon: results.filter((r) =>
-        r.applicationStatus === "OPENING SOON"
+      closingSoon: results.filter(result =>
+        result.applicationStatus.startsWith("CLOSING SOON")
       ).length,
-
-      possiblyOpen: results.filter((r) =>
-        r.applicationStatus.startsWith("Possibly open")
+      possiblyOpen: results.filter(result =>
+        result.applicationStatus.startsWith("Possibly open")
       ).length,
-
-      datesUnconfirmed: results.filter((r) =>
-        r.applicationStatus === "Dates unconfirmed"
+      verified: results.filter(result =>
+        result.verificationStatus === "Verified"
       ).length,
-
-      fullyFunded: results.filter((r) =>
-        r.fundingStatus ===
-        "Fully funded / scholarship available"
+      partiallyVerified: results.filter(result =>
+        result.verificationStatus === "Partially verified"
       ).length,
-
-      partialFunding: results.filter((r) =>
-        r.fundingStatus ===
-        "Tuition waiver / partial funding"
-      ).length,
-
-      selfFunded: results.filter((r) =>
-        r.fundingStatus === "Self-funded"
-      ).length,
-
-      fundingUnknown: results.filter((r) =>
-        r.fundingStatus === "Funding not confirmed"
+      notVerified: results.filter(result =>
+        result.verificationStatus === "Not verified"
       ).length
     };
 
     res.json({
       success: true,
-
       searchedSubject: subject,
-
       selectedRegion,
-
       searchWindow: {
-        start: formatDate(windowStart),
-        end: formatDate(windowEnd)
+        start: startText,
+        end: endText
       },
-
-      dateRule:
-        "Based on application opening date, not closing date. Applications opened earlier are also included if they remain open.",
-
-      fundingRule:
-        "Funding is classified separately as fully funded, partial/tuition waiver, self-funded, or not confirmed. Search-result evidence is not treated as final verification.",
-
+      dateRule: "Selected by application opening date; previously opened applications are included only when evidence indicates they remain open.",
       totalResults: results.length,
-
       counts,
-
       failedSearches,
-
-      notice:
-        "Dates, funding, English requirements and application fees are extracted from search-result information and must be checked on the official programme/university page before applying.",
-
+      notice: "Official links are checked separately. A verified programme page does not automatically verify scholarship availability or personal eligibility.",
       results
     });
   } catch (error) {
@@ -1354,7 +821,8 @@ app.get("/api/search", async (req, res) => {
   }
 });
 
-app.get("*", (req, res, next) => {
+// Express 5-compatible fallback route.
+app.use((req, res, next) => {
   if (req.path.startsWith("/api/")) {
     return next();
   }
