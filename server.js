@@ -291,7 +291,6 @@ function extractApplicationDates(raw = "") {
       opening = date;
     }
 
-    // FIX:
     // Official pages may simply say "The deadline is February 17, 2027"
     // without using the words application/programme/admissions.
     if (
@@ -322,32 +321,127 @@ function hasMastersEvidence(text = "") {
   return /\b(master'?s|master of|m\.?s\.?|m\.?a\.?|msc|m\.sc\.?|graduate degree|postgraduate degree|erasmus mundus joint master)\b/i.test(text);
 }
 
-function isRelevantProgramme(title = "", content = "") {
-  const titleText = title.toLowerCase();
-  const contentText = content.toLowerCase();
+// --------------------------------------------------
+// QUERY-SPECIFIC SUBJECT MATCHING
+// --------------------------------------------------
 
-  if (!hasMastersEvidence(`${title}\n${content}`)) {
+function normalizeQuery(query = "") {
+  return clean(query)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function queryMatchesProgramme(query, title = "", programme = "", content = "") {
+  const q = normalizeQuery(query);
+
+  const titleAndProgramme =
+    (String(title) + " " + String(programme)).toLowerCase();
+
+  const contentText = String(content).toLowerCase();
+
+  const passages = contentText
+    .split(/[\n.!?;]+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  const matches = pattern =>
+    pattern.test(titleAndProgramme) ||
+    passages.some(passage =>
+      passage.length < 900 && pattern.test(passage)
+    );
+
+  if (!q) return false;
+
+  // Mathematics Education
+  if (
+    /\b(mathematics|maths?) education\b|\bmathematics teacher education\b/.test(q)
+  ) {
+    return matches(
+      /\b(mathematics|maths?) education\b|\b(mathematics|maths?) teaching\b|\b(mathematics|maths?) teacher(s)?\b|\bteacher education\b.{0,100}\b(mathematics|maths?)\b|\b(mathematics|maths?) curriculum\b|\bsecondary mathematics teachers?\b|\bmathematics pedagogy\b/
+    );
+  }
+
+  // Applied Mathematics
+  if (/\b(applied mathematics|applied math)\b/.test(q)) {
+    return matches(/\bapplied mathematics\b|\bapplied math\b/);
+  }
+
+  // Mathematical Data Science
+  if (/\b(mathematical data science|math data science)\b/.test(q)) {
+    return matches(/\bmathematical data science\b|\bmath data science\b/);
+  }
+
+  // Data Analytics
+  if (/\b(data analytics|analytics)\b/.test(q)) {
+    return matches(/\bdata analytics\b|\banalytics\b/);
+  }
+
+  // Data Science
+  if (/\b(data science|data sciences)\b/.test(q)) {
+    return matches(/\bdata science\b|\bdata sciences\b|\bmathematical data science\b/);
+  }
+
+  // Statistics
+  if (/\b(statistics|statistical)\b/.test(q)) {
+    return matches(/\bstatistics\b|\bstatistical science\b|\bmathematical statistics\b|\bbiostatistics\b/);
+  }
+
+  // Operations Research
+  if (/\b(operations research|operational research)\b/.test(q)) {
+    return matches(/\boperations research\b|\boperational research\b/);
+  }
+
+  // Computational Mathematics
+  if (/\b(computational mathematics|computational math)\b/.test(q)) {
+    return matches(/\bcomputational mathematics\b|\bcomputational math\b/);
+  }
+
+  // Machine Learning and Artificial Intelligence
+  if (/\b(machine learning|artificial intelligence|ai)\b/.test(q)) {
+    return matches(/\bmachine learning\b|\bartificial intelligence\b/);
+  }
+
+  // General Mathematics
+  if (/^(mathematics|math|maths|mathematical)$/.test(q)) {
+    return matches(/\bmathematics\b|\bmathematical\b|\bmaths\b/);
+  }
+
+  // Other specific queries must match the requested phrase.
+  const phrase = q.split(" ").join("\\s+");
+
+  return matches(new RegExp("\\b" + phrase + "\\b", "i"));
+}
+
+function isRelevantProgramme(
+  query = "",
+  title = "",
+  content = "",
+  programme = ""
+) {
+  if (
+    !hasMastersEvidence(
+      String(title) + "\n" +
+      String(programme) + "\n" +
+      String(content)
+    )
+  ) {
     return false;
   }
 
-  // A subject match in the actual title is strong evidence.
-  if (SUBJECTS.some(term => titleText.includes(term))) {
-    return true;
-  }
-
-  // Otherwise require the subject and Master's evidence together
-  // in the same short passage. The search query itself is not evidence.
-  const passages = contentText
-    .split(/[\n.!?]+/)
-    .map(text => text.trim())
-    .filter(Boolean);
-
-  return passages.some(passage =>
-    passage.length < 700 &&
-    hasMastersEvidence(passage) &&
-    SUBJECTS.some(term => passage.includes(term))
+  return queryMatchesProgramme(
+    query,
+    title,
+    programme,
+    content
   );
 }
+
+// --------------------------------------------------
+// ENGLISH, APPLICATION FEE, TUITION AND FUNDING
+// --------------------------------------------------
 
 function detectEnglish(text = "") {
   const lower = text.toLowerCase();
@@ -435,6 +529,10 @@ function regionMatches(country, region) {
     country.toLowerCase() === region.toLowerCase();
 }
 
+// --------------------------------------------------
+// STANDARD RESULT FORMAT
+// --------------------------------------------------
+
 function makeResult(data) {
   const institution =
     data.institution ||
@@ -518,17 +616,14 @@ function makeResult(data) {
   };
 }
 
-// Exact records checked for the 2026–2027 cycle only.
-// These dates must be rechecked before being reused for another cycle.
+// --------------------------------------------------
+// VERIFIED OFFICIAL RECORDS
+// --------------------------------------------------
+
 function knownOfficialResults(query) {
   const q = query.toLowerCase();
 
-  if (
-    !SUBJECTS.some(term => q.includes(term)) &&
-    !/math|stat|data|comput/.test(q)
-  ) {
-    return [];
-  }
+  if (!q.trim()) return [];
 
   const records = [
     makeResult({
@@ -768,14 +863,19 @@ function knownOfficialResults(query) {
     })
   ];
 
-  return records.filter(record => {
-    const text = `${record.programme} ${record.title}`.toLowerCase();
-
-    return SUBJECTS.some(term => text.includes(term)) ||
-      (/math|stat|data/.test(q) &&
-       /interdisciplinary mathematics|mathematics|statistics|data science/.test(text));
-  });
+  return records.filter(record =>
+    queryMatchesProgramme(
+      q,
+      record.title,
+      record.programme,
+      record.description || ""
+    )
+  );
 }
+
+// --------------------------------------------------
+// LIVE TAVILY SEARCH
+// --------------------------------------------------
 
 async function tavilySearch(query, region) {
   if (!TAVILY_API_KEY) {
@@ -790,9 +890,11 @@ async function tavilySearch(query, region) {
     : region;
 
   const queries = [
-    `official university master's ${query} admissions 2027 ${regionText}`,
-    `official scholarship master's ${query} 2027 ${regionText}`,
-    `Erasmus Mundus joint master ${query} scholarship 2027 official`
+    `official university master's "${query}" admissions 2027 ${regionText}`,
+    `official university scholarship master's "${query}" 2027 ${regionText}`,
+    `fully funded master's "${query}" scholarship 2027 official`,
+    `Erasmus Mundus joint master "${query}" scholarship 2027 official`,
+    `"${query}" master's "application deadline" 2027 university`
   ];
 
   const items = [];
@@ -840,7 +942,11 @@ async function tavilySearch(query, region) {
   };
 }
 
-function resultFromSearchItem(item, window) {
+// --------------------------------------------------
+// PROCESS LIVE SEARCH RESULTS
+// --------------------------------------------------
+
+function resultFromSearchItem(item, window, query) {
   const url = item.url || "";
 
   if (
@@ -852,13 +958,14 @@ function resultFromSearchItem(item, window) {
   }
 
   const title = clean(item.title || "");
+
   const content = clean(
     item.raw_content ||
     item.content ||
     ""
   );
 
-  if (!isRelevantProgramme(title, content)) {
+  if (!isRelevantProgramme(query, title, content, title)) {
     return null;
   }
 
@@ -920,10 +1027,10 @@ function resultFromSearchItem(item, window) {
   });
 }
 
-// FIX:
-// Treat different official InterMaths application pages
-// describing the same Interdisciplinary Mathematics EMJM
-// as one canonical result.
+// --------------------------------------------------
+// DUPLICATE PREVENTION
+// --------------------------------------------------
+
 function canonicalKey(item) {
   const host =
     hostOf(
@@ -995,17 +1102,25 @@ function deduplicate(items) {
   return [...map.values()];
 }
 
+// --------------------------------------------------
+// HEALTH CHECK
+// --------------------------------------------------
+
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     message: "Scholarship Finder server is running",
-    build: "accurate-filter-v4",
+    build: "query-aware-v5",
     tavilyConfigured:
       Boolean(TAVILY_API_KEY),
     timestamp:
       new Date().toISOString()
   });
 });
+
+// --------------------------------------------------
+// MAIN SEARCH API
+// --------------------------------------------------
 
 app.get("/api/search", async (req, res) => {
   try {
@@ -1063,7 +1178,8 @@ app.get("/api/search", async (req, res) => {
         .map(item =>
           resultFromSearchItem(
             item,
-            window
+            window,
+            query
           )
         )
         .filter(Boolean);
@@ -1082,6 +1198,7 @@ app.get("/api/search", async (req, res) => {
         )
       );
 
+    // Prioritise MOI and possible English waivers.
     results.sort((a, b) => {
       const rank = item => {
         const value =
@@ -1234,6 +1351,10 @@ app.get("/api/search", async (req, res) => {
     });
   }
 });
+
+// --------------------------------------------------
+// API FALLBACK
+// --------------------------------------------------
 
 app.use("/api", (req, res) => {
   res.status(404).json({
