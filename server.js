@@ -256,7 +256,6 @@ function extractApplicationDates(raw = "") {
 
     if (
       !closing &&
-      /\b(application|applications|master'?s|programme|program|admissions?|scholarship)\b/.test(lower) &&
       /\b(deadline|closes?|closing date|due date|last day)\b/.test(lower)
     ) {
       closing = date;
